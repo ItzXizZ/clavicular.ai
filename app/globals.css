@@ -1,0 +1,273 @@
+@import "tailwindcss";
+
+@font-face {
+  font-family: 'Satoshi';
+  src: url('https://api.fontshare.com/v2/css?f[]=satoshi@700,500,400&display=swap');
+}
+
+:root {
+  --background: #0c0c0f;
+  --foreground: #fafafa;
+  --card: #161619;
+  --card-hover: #1c1c20;
+  --border: #2a2a2e;
+  --accent: #22c55e;
+  --accent-dim: #16a34a;
+  --muted: #71717a;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --score-glow: rgba(34, 197, 94, 0.3);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-muted: var(--muted);
+  --font-sans: 'Satoshi', system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: 'Satoshi', system-ui, -apple-system, sans-serif;
+  min-height: 100vh;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--card);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+}
+
+/* Toggle switch styles */
+.toggle-switch {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  background: var(--card);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  border: 1px solid var(--border);
+}
+
+.toggle-switch.active {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.toggle-switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  background: var(--foreground);
+  border-radius: 50%;
+  transition: transform 0.2s ease;
+}
+
+.toggle-switch.active::after {
+  transform: translateX(20px);
+}
+
+/* iPhone frame gradient */
+.iphone-frame {
+  background: linear-gradient(145deg, #2d2d30 0%, #1a1a1c 50%, #0f0f10 100%);
+  box-shadow: 
+    0 0 0 2px #3d3d40,
+    0 0 0 4px #1a1a1c,
+    0 25px 50px -12px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+/* Score animation */
+@keyframes scoreReveal {
+  0% {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.score-reveal {
+  animation: scoreReveal 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Pulse animation for buttons */
+@keyframes pulse-accent {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(34, 197, 94, 0);
+  }
+}
+
+.pulse-accent {
+  animation: pulse-accent 2s infinite;
+}
+
+/* Face oval placeholder */
+.face-oval {
+  background: linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%);
+  border: 2px dashed rgba(255,255,255,0.15);
+}
+
+/* Card hover effects */
+.feature-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  transition: all 0.2s ease;
+}
+
+.feature-card:hover {
+  background: var(--card-hover);
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+/* Gradient text */
+.gradient-text {
+  background: linear-gradient(135deg, var(--foreground) 0%, var(--muted) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Loading shimmer */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--card) 0%,
+    var(--card-hover) 50%,
+    var(--card) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* Protocol card */
+.protocol-card {
+  background: linear-gradient(135deg, var(--card) 0%, rgba(22, 22, 25, 0.8) 100%);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(10px);
+  transition: all 0.2s ease;
+}
+
+.protocol-card:hover {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Product card hover effect */
+.product-card {
+  transition: all 0.2s ease;
+}
+
+.product-card:hover {
+  transform: translateX(4px);
+}
+
+/* Product image zoom on hover */
+.product-image-container:hover img {
+  transform: scale(1.1);
+}
+
+/* Softmax/Hardmax badges */
+.badge-softmax {
+  background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+}
+
+.badge-hardmax {
+  background: linear-gradient(135deg, #c2410c 0%, #f97316 100%);
+}
+
+/* Notch styling */
+.notch {
+  background: #000;
+  border-radius: 20px;
+}
+
+/* Camera button styles */
+.camera-btn {
+  background: linear-gradient(180deg, #ffffff 0%, #e5e5e5 100%);
+  box-shadow: 
+    0 2px 8px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  transition: all 0.15s ease;
+}
+
+.camera-btn:hover {
+  transform: scale(1.02);
+  box-shadow: 
+    0 4px 12px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.camera-btn:active {
+  transform: scale(0.98);
+}
+
+/* Flashlight button glow */
+@keyframes flashlight-pulse {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(250, 204, 21, 0.6), 0 0 40px rgba(250, 204, 21, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(250, 204, 21, 0.8), 0 0 60px rgba(250, 204, 21, 0.4);
+  }
+}
+
+.flashlight-btn-active {
+  animation: flashlight-pulse 1.5s ease-in-out infinite;
+}
+
+/* Flashlight ring glow animation */
+@keyframes ring-breathe {
+  0%, 100% {
+    opacity: 0.9;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.flashlight-ring {
+  animation: ring-breathe 2s ease-in-out infinite;
+}

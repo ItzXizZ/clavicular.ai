@@ -1,0 +1,113 @@
+// Prisma schema for Clavicular.AI
+// Using PostgreSQL for production
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// Facial features and their ideal values
+model Feature {
+  id                String   @id
+  name              String
+  category          String   // HARM, MISC, ANGU, DIMO
+  importance        String   // highest, high, medium, low
+  idealValue        String
+  measurementMethod String?
+  weight            Float    @default(1.0)
+  issues            Issue[]  @relation("FeatureIssues")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+// Issues that can be detected from analysis
+model Issue {
+  id           String        @id
+  displayName  String
+  description  String?
+  severity     String?       // mild, moderate, severe
+  features     Feature[]     @relation("FeatureIssues")
+  improvements Improvement[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+// Improvement methods linked to issues
+model Improvement {
+  id            String    @id @default(cuid())
+  issueId       String
+  issue         Issue     @relation(fields: [issueId], references: [id])
+  type          String    // SOFT, SEMI, HARD
+  name          String
+  description   String
+  timeline      String?
+  effectiveness String?
+  costMin       Float?
+  costMax       Float?
+  risks         String?   // JSON array stored as string
+  products      Product[] @relation("ImprovementProducts")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+// Products that can help with improvements
+model Product {
+  id                  String        @id @default(cuid())
+  name                String
+  category            String        // skincare, haircare, device, supplement, injectable, surgical
+  subcategory         String?
+  priceMin            Float?
+  priceMax            Float?
+  purchaseUrls        String?       // JSON array stored as string
+  imageUrl            String?       // Product image URL
+  brand               String?       // Product brand name
+  activeIngredients   String?       // JSON array stored as string
+  effectivenessRating Float?
+  riskLevel           String?       // low, medium, high
+  requiresPrescription Boolean      @default(false)
+  usageInstructions   String?
+  timelineToResults   String?
+  sideEffects         String?       // JSON array stored as string
+  improvements        Improvement[] @relation("ImprovementProducts")
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+}
+
+// Store analysis sessions (optional, for future use)
+model AnalysisSession {
+  id              String   @id @default(cuid())
+  overallScore    Float
+  harmScore       Float
+  miscScore       Float
+  anguScore       Float
+  dimoScore       Float
+  measurements    String   // JSON stored as string
+  features        String   // JSON stored as string
+  recommendations String?  // JSON stored as string
+  profileMode     String   // front, side
+  createdAt       DateTime @default(now())
+}
+
+// Public leaderboard entries
+model LeaderboardEntry {
+  id              String   @id @default(cuid())
+  name            String
+  age             Int
+  imageUrl        String   // Supabase storage URL
+  overallScore    Float
+  harmScore       Float
+  miscScore       Float
+  anguScore       Float
+  dimoScore       Float
+  rarity          String
+  features        String   // JSON stored as string - top features
+  consentedAt     DateTime // When user consented to public display
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
