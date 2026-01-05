@@ -152,13 +152,27 @@ export default function Leaderboard({ isOpen, onClose }: LeaderboardProps) {
               </div>
             ) : error ? (
               <div className="text-center py-20">
-                <p className="text-red-400 mb-4">{error}</p>
-                <button
-                  onClick={fetchLeaderboard}
-                  className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg transition-colors"
-                >
-                  Try Again
-                </button>
+                {error.includes('authentication') || error.includes('token') ? (
+                  <>
+                    <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-zinc-900 flex items-center justify-center">
+                      <svg className="w-8 h-8 text-zinc-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                      </svg>
+                    </div>
+                    <p className="text-zinc-400 text-lg mb-2">Log in to see leaderboard</p>
+                    <p className="text-zinc-600 text-sm">Sign in to view and compete on the leaderboard</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-red-400 mb-4">{error}</p>
+                    <button
+                      onClick={fetchLeaderboard}
+                      className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg transition-colors"
+                    >
+                      Try Again
+                    </button>
+                  </>
+                )}
               </div>
             ) : entries.length === 0 ? (
               <div className="text-center py-20">
