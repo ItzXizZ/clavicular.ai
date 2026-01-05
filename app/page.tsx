@@ -13,10 +13,12 @@ import LeaderboardEntryModal from '@/components/LeaderboardEntryModal';
 import Leaderboard from '@/components/Leaderboard';
 import AuthModal from '@/components/AuthModal';
 import UserMenu from '@/components/UserMenu';
+import ShareModal from '@/components/ShareModal';
+import PaymentModal from '@/components/PaymentModal';
 import { useAppStore } from '@/lib/store';
 import { useAuth } from '@/lib/useAuth';
 import { authFetch } from '@/lib/apiClient';
-import type { Landmark } from '@/lib/types';
+import type { Landmark, ProtocolRecommendation as ProtocolRecommendationType } from '@/lib/types';
 
 export default function Home() {
   const [analysisError, setAnalysisError] = useState<string | null>(null);
@@ -25,13 +27,28 @@ export default function Home() {
   // Auth state
   const { isAuthenticated, isLoading: authLoading, dbUser, user, refreshDbUser } = useAuth();
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [authFeature, setAuthFeature] = useState<'leaderboard' | 'protocol'>('leaderboard');
+  const [authFeature, setAuthFeature] = useState<'leaderboard' | 'protocol' | 'flaws'>('leaderboard');
   
   // Leaderboard state
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showLeaderboardEntry, setShowLeaderboardEntry] = useState(false);
   const [isSubmittingToLeaderboard, setIsSubmittingToLeaderboard] = useState(false);
   const [leaderboardSuccess, setLeaderboardSuccess] = useState<{ rank: number } | null>(null);
+  const [isNewUserFlow, setIsNewUserFlow] = useState(false); // Track if leaderboard modal is for new user
+  
+  // Share state
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [showShareTooltip, setShowShareTooltip] = useState(false);
+  
+  // Premium/payment state
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentFeature, setPaymentFeature] = useState<'flaws' | 'protocol' | 'premium'>('premium');
+  const isPremium = dbUser?.accessTier === 'PREMIUM' || dbUser?.accessTier === 'premium';
+  
+  // AI Protocol state
+  const [aiProtocols, setAiProtocols] = useState<ProtocolRecommendationType[]>([]);
+  const [isLoadingAiProtocols, setIsLoadingAiProtocols] = useState(false);
+  const [aiProtocolError, setAiProtocolError] = useState<string | null>(null);
   
   const {
     viewMode,
@@ -55,6 +72,53 @@ export default function Home() {
     setProtocols,
   } = useAppStore();
 
+  // Handle pending action after OAuth redirect and auto-join leaderboard for new users
+  useEffect(() => {
+    if (isAuthenticated && !authLoading && dbUser) {
+      const pendingAction = sessionStorage.getItem('auth_pending_action');
+      const hasProcessedNewUser = sessionStorage.getItem('processed_new_user');
+      
+      if (pendingAction) {
+        sessionStorage.removeItem('auth_pending_action');
+        
+        // Execute the pending action
+        if (pendingAction === 'flaws') {
+          setResultsView('flaws');
+          setSelectedFeatureId(null);
+        } else if (pendingAction === 'leaderboard') {
+          setShowLeaderboard(true);
+        } else if (pendingAction === 'protocol') {
+          setShowProtocol(true);
+        }
+      }
+      
+      // Auto-prompt new users to join leaderboard if they have analysis results
+      // Only do this once per session
+      if (!hasProcessedNewUser && !dbUser.leaderboardEntry && analysisResult && capturedImage) {
+        sessionStorage.setItem('processed_new_user', 'true');
+        // Show leaderboard entry modal for new users with welcome message
+        setIsNewUserFlow(true);
+        setShowLeaderboardEntry(true);
+      }
+    }
+  }, [isAuthenticated, authLoading, dbUser, analysisResult, capturedImage, setResultsView, setSelectedFeatureId, setShowProtocol]);
+
+  // Show share tooltip for new users when they view results
+  useEffect(() => {
+    if (viewMode === 'results' && analysisResult) {
+      const hasSeenShareTooltip = localStorage.getItem('hasSeenShareTooltip');
+      if (!hasSeenShareTooltip) {
+        // Small delay so the UI settles first
+        const timer = setTimeout(() => setShowShareTooltip(true), 1000);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [viewMode, analysisResult]);
+
+  const dismissShareTooltip = () => {
+    setShowShareTooltip(false);
+    localStorage.setItem('hasSeenShareTooltip', 'true');
+  };
 
   // Handle image capture and analysis with real landmarks
   const handleCapture = useCallback(async (imageData: string, landmarks: Landmark[]) => {
@@ -131,9 +195,56 @@ export default function Home() {
     }
   };
 
-  // Handle viewing protocol (gated)
+  // Handle viewing protocol (gated + premium check)
   const handleViewProtocol = () => {
-    handleGatedAction('protocol', () => setShowProtocol(true));
+    if (!isAuthenticated) {
+      setAuthFeature('protocol');
+      setShowAuthModal(true);
+      return;
+    }
+    
+    if (!isPremium) {
+      setPaymentFeature('protocol');
+      setShowPaymentModal(true);
+      return;
+    }
+    
+    setShowProtocol(true);
+    // Fetch AI protocols if premium
+    fetchAiProtocols();
+  };
+
+  // Fetch AI-powered protocol recommendations
+  const fetchAiProtocols = async () => {
+    if (!analysisResult || !isPremium) return;
+    
+    setIsLoadingAiProtocols(true);
+    setAiProtocolError(null);
+    
+    try {
+      const response = await authFetch('/api/ai-protocol', {
+        method: 'POST',
+        body: JSON.stringify({
+          features: analysisResult.features,
+          overallScore: analysisResult.overallScore,
+          categoryScores: analysisResult.categoryScores,
+          protocolType,
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to fetch AI recommendations');
+      }
+      
+      const data = await response.json();
+      setAiProtocols(data.protocols);
+    } catch (err) {
+      console.error('AI Protocol error:', err);
+      setAiProtocolError(err instanceof Error ? err.message : 'Failed to load AI recommendations');
+    } finally {
+      setIsLoadingAiProtocols(false);
+    }
   };
 
   // Check if user already has a leaderboard entry
@@ -159,9 +270,9 @@ export default function Home() {
 
     setIsSubmittingToLeaderboard(true);
     try {
-      // Get top features for the entry
-      const topFeatures = analysisResult.features
-        .sort((a, b) => Math.abs(b.deviation) - Math.abs(a.deviation))
+      // Get top features for the entry (highest scoring features)
+      const topFeatures = [...analysisResult.features]
+        .sort((a, b) => b.value - a.value)
         .slice(0, 6)
         .map(f => ({
           name: f.name,
@@ -216,6 +327,10 @@ export default function Home() {
     } else if (authFeature === 'leaderboard') {
       // Show leaderboard view - user can then choose to join or update
       setShowLeaderboard(true);
+    } else if (authFeature === 'flaws') {
+      // Switch to flaws view
+      setResultsView('flaws');
+      setSelectedFeatureId(null);
     }
   };
 
@@ -225,9 +340,9 @@ export default function Home() {
 
     setIsSubmittingToLeaderboard(true);
     try {
-      // Get top features for the entry
-      const topFeatures = analysisResult.features
-        .sort((a, b) => Math.abs(b.deviation) - Math.abs(a.deviation))
+      // Get top features for the entry (highest scoring features)
+      const topFeatures = [...analysisResult.features]
+        .sort((a, b) => b.value - a.value)
         .slice(0, 6)
         .map(f => ({
           name: f.name,
@@ -261,6 +376,7 @@ export default function Home() {
       const data = await response.json();
       setLeaderboardSuccess({ rank: data.rank });
       setShowLeaderboardEntry(false);
+      setIsNewUserFlow(false);
       // Refresh user data so the UI updates to show "Update" button
       await refreshDbUser();
       // Automatically open the leaderboard after successful submission
@@ -315,10 +431,17 @@ export default function Home() {
         isOpen={showAuthModal}
         onClose={() => setShowAuthModal(false)}
         onSuccess={handleAuthSuccess}
-        title={authFeature === 'leaderboard' ? 'Sign in for Leaderboard' : 'Sign in for Protocol'}
+        pendingAction={authFeature}
+        title={
+          authFeature === 'leaderboard' ? 'Sign in for Leaderboard' : 
+          authFeature === 'flaws' ? 'Sign in to View Flaws' :
+          'Sign in for Protocol'
+        }
         description={
           authFeature === 'leaderboard' 
             ? 'Create a free account to view and join the leaderboard' 
+            : authFeature === 'flaws'
+            ? 'Create a free account to see what\'s holding you back'
             : 'Create a free account to view your personalized improvement protocol'
         }
       />
@@ -418,9 +541,56 @@ export default function Home() {
                   />
                 </div>
 
+                {/* AI Protocol Generation Button */}
+                {isPremium && (
+                  <div className="mb-4">
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={fetchAiProtocols}
+                      disabled={isLoadingAiProtocols}
+                      className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500/20 to-blue-500/20 hover:from-purple-500/30 hover:to-blue-500/30 border border-purple-500/30 rounded-lg transition-all"
+                    >
+                      {isLoadingAiProtocols ? (
+                        <>
+                          <svg className="w-4 h-4 animate-spin text-purple-400" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                          </svg>
+                          <span className="text-sm text-purple-300">Generating AI recommendations...</span>
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                          </svg>
+                          <span className="text-sm text-purple-300">
+                            {aiProtocols.length > 0 ? 'Regenerate AI Recommendations' : 'Generate AI Recommendations'}
+                          </span>
+                        </>
+                      )}
+                    </motion.button>
+                    
+                    {aiProtocolError && (
+                      <p className="text-xs text-red-400 mt-2">{aiProtocolError}</p>
+                    )}
+                  </div>
+                )}
+
                 {/* Protocol content - much larger area */}
                 <div className="bg-zinc-900/30 rounded-2xl border border-zinc-800/50 p-6 min-h-[500px]">
-                  <ProtocolRecommendation protocols={protocols} />
+                  {/* Show AI protocols if available, otherwise show default */}
+                  <ProtocolRecommendation protocols={aiProtocols.length > 0 ? aiProtocols : protocols} />
+                  
+                  {/* Premium badge */}
+                  {aiProtocols.length > 0 && (
+                    <div className="mt-4 flex items-center gap-2 text-purple-400 text-xs">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                      </svg>
+                      <span>AI-Powered Recommendations</span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -428,7 +598,7 @@ export default function Home() {
         )}
       </AnimatePresence>
 
-      {/* Header / Branding (visible on larger screens) */}
+      {/* Header / Branding + Potential Score (visible on larger screens) */}
       <motion.div
         initial={{ opacity: 0, x: -20 }}
         animate={{ opacity: 1, x: 0 }}
@@ -441,6 +611,122 @@ export default function Home() {
         <p className="text-zinc-500 text-sm lg:text-base hidden lg:block">
           Find out where you really stand. Get your face rated and see how you stack up on the leaderboard.
         </p>
+
+        {/* Potential Score Section - Only visible to logged-in users with results */}
+        <AnimatePresence>
+          {isAuthenticated && viewMode === 'results' && analysisResult && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 20 }}
+              transition={{ delay: 0.3 }}
+              className="hidden lg:block mt-8"
+            >
+              <div className="bg-black rounded-2xl border border-zinc-800 p-6 relative overflow-hidden">
+                
+                {/* Header */}
+                <p className="text-xs text-zinc-500 mb-4">Your Potential</p>
+
+                {/* Current vs Potential Score */}
+                <div className="flex items-center justify-center gap-6 mb-4">
+                  <span 
+                    className="text-3xl font-bold"
+                    style={{ 
+                      color: analysisResult.overallScore >= 8 ? '#22c55e' : 
+                             analysisResult.overallScore >= 6.5 ? '#84cc16' : 
+                             analysisResult.overallScore >= 5 ? '#eab308' : '#ef4444'
+                    }}
+                  >
+                    {analysisResult.overallScore.toFixed(1)}
+                  </span>
+                  <svg className="w-5 h-5 text-zinc-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                  </svg>
+                  <span className="text-3xl font-bold text-[#22c55e]">
+                    {Math.min(10, analysisResult.overallScore + (protocols.reduce((sum, p) => sum + p.impactScore, 0) * 0.5)).toFixed(1)}
+                  </span>
+                </div>
+
+                {/* Improvement estimate */}
+                <div className="bg-black/30 rounded-xl p-3 mb-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-zinc-400">Estimated improvement</span>
+                    <span className="text-sm font-semibold text-[#22c55e]">
+                      +{(protocols.reduce((sum, p) => sum + p.impactScore, 0) * 0.5).toFixed(1)} pts
+                    </span>
+                  </div>
+                  <div className="mt-2 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${(analysisResult.overallScore / 10) * 100}%` }}
+                      className="h-full bg-gradient-to-r from-zinc-600 to-zinc-500 rounded-full relative"
+                    >
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${Math.min(100, (protocols.reduce((sum, p) => sum + p.impactScore, 0) * 0.5 / analysisResult.overallScore) * 100)}%` }}
+                        transition={{ delay: 0.5 }}
+                        className="absolute right-0 top-0 h-full bg-gradient-to-r from-[#22c55e]/50 to-[#22c55e] rounded-full"
+                        style={{ transform: 'translateX(100%)' }}
+                      />
+                    </motion.div>
+                  </div>
+                </div>
+
+                {/* CTA Button */}
+                {isPremium ? (
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={handleViewProtocol}
+                    className="w-full py-3 bg-gradient-to-r from-[#22c55e] to-[#16a34a] hover:from-[#16a34a] hover:to-[#15803d] text-white font-semibold rounded-xl transition-all shadow-lg shadow-green-500/20"
+                  >
+                    View Your Protocol
+                  </motion.button>
+                ) : (
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => {
+                      setPaymentFeature('protocol');
+                      setShowPaymentModal(true);
+                    }}
+                    className="w-full py-3 bg-gradient-to-r from-[#22c55e] to-[#16a34a] hover:from-[#16a34a] hover:to-[#15803d] text-white font-semibold rounded-xl transition-all shadow-lg shadow-green-500/20"
+                  >
+                    <span className="flex items-center justify-center gap-2">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                      </svg>
+                      Unlock Protocol - $9.99
+                    </span>
+                  </motion.button>
+                )}
+
+                {/* What's included */}
+                <div className="mt-4 space-y-2">
+                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider">What&apos;s included:</p>
+                  <div className="flex items-center gap-2 text-xs text-zinc-400">
+                    <svg className="w-3 h-3 text-[#22c55e]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span>AI-personalized recommendations</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-zinc-400">
+                    <svg className="w-3 h-3 text-[#22c55e]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span>Product links & pricing</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-zinc-400">
+                    <svg className="w-3 h-3 text-[#22c55e]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span>Softmax & Hardmax options</span>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </motion.div>
 
       {/* iPhone with Camera/Results */}
@@ -474,6 +760,8 @@ export default function Home() {
                   onCapture={handleCapture} 
                   flashlightOn={flashlightOn}
                   onFlashlightToggle={() => setFlashlightOn(!flashlightOn)}
+                  onShareClick={() => setShowShareModal(true)}
+                  hasResults={!!analysisResult}
                 />
               </motion.div>
             ) : (
@@ -484,15 +772,76 @@ export default function Home() {
                 exit={{ opacity: 0 }}
                 className="w-full h-full flex flex-col"
               >
-                {/* Back button */}
-                <button
-                  onClick={handleBackToCamera}
-                  className="absolute top-14 left-4 z-20 p-2 text-zinc-400 hover:text-white transition-colors bg-black/30 rounded-full backdrop-blur-sm"
-                >
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                  </svg>
-                </button>
+                {/* Top bar buttons */}
+                <div className="absolute top-14 left-4 right-4 z-20 flex justify-between items-center">
+                  {/* Back button */}
+                  <button
+                    onClick={handleBackToCamera}
+                    className="p-2 text-zinc-400 hover:text-white transition-colors bg-black/30 rounded-full backdrop-blur-sm"
+                  >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                  </button>
+                  
+                  {/* Share button with tooltip */}
+                  <div className="relative">
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => {
+                        setShowShareModal(true);
+                        dismissShareTooltip();
+                      }}
+                      className={`p-2 text-zinc-400 hover:text-[#22c55e] transition-colors bg-black/30 rounded-full backdrop-blur-sm ${showShareTooltip ? 'ring-2 ring-[#22c55e] ring-offset-2 ring-offset-black animate-pulse' : ''}`}
+                      title="Share results"
+                    >
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                      </svg>
+                    </motion.button>
+                    
+                    {/* Share tooltip for new users */}
+                    <AnimatePresence>
+                      {showShareTooltip && (
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.9, y: -10 }}
+                          animate={{ opacity: 1, scale: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.9, y: -10 }}
+                          className="absolute top-full right-0 mt-2 z-50"
+                        >
+                          <div className="bg-black border border-zinc-700 rounded-xl p-4 shadow-2xl w-64">
+                            {/* Arrow pointing up */}
+                            <div className="absolute -top-2 right-4 w-4 h-4 bg-black border-l border-t border-zinc-700 transform rotate-45" />
+                            
+                            <div className="relative">
+                              <div className="flex items-start gap-3 mb-3">
+                                <div className="w-8 h-8 rounded-lg bg-[#22c55e]/20 flex items-center justify-center flex-shrink-0">
+                                  <svg className="w-4 h-4 text-[#22c55e]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                                  </svg>
+                                </div>
+                                <div>
+                                  <h4 className="text-sm font-semibold text-white mb-1">Share Your Results</h4>
+                                  <p className="text-xs text-zinc-400 leading-relaxed">
+                                    Generate a shareable link to show off your score! Links expire after 24 hours.
+                                  </p>
+                                </div>
+                              </div>
+                              
+                              <button
+                                onClick={dismissShareTooltip}
+                                className="w-full py-2 bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-medium rounded-lg transition-colors"
+                              >
+                                Got it!
+                              </button>
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </div>
 
                 {/* Face visualization with real landmarks */}
                 {capturedImage && analysisResult?.landmarks && (
@@ -504,9 +853,9 @@ export default function Home() {
                   </div>
                 )}
 
-                {/* Score display overlay */}
+                {/* Score display overlay - positioned below the top bar */}
                 {analysisResult && (
-                  <div className="absolute top-14 right-4 z-10">
+                  <div className="absolute top-28 right-4 z-10">
                     <motion.div
                       initial={{ opacity: 0, scale: 0.9 }}
                       animate={{ opacity: 1, scale: 1 }}
@@ -546,15 +895,29 @@ export default function Home() {
           >
             {/* Toggle between flaws/strengths + Leaderboard buttons */}
             <div className="flex items-center justify-between mb-4">
-              <ToggleSwitch
-                leftLabel="Flaws"
-                rightLabel="Strengths"
-                isRight={resultsView === 'strengths'}
-                onChange={(isRight) => {
-                  setResultsView(isRight ? 'strengths' : 'flaws');
-                  setSelectedFeatureId(null); // Clear selection when switching views
-                }}
-              />
+              <div className="flex items-center gap-2">
+                <ToggleSwitch
+                  leftLabel="Flaws"
+                  rightLabel="Strengths"
+                  isRight={resultsView === 'strengths'}
+                  onChange={(isRight) => {
+                    if (!isRight && !isAuthenticated) {
+                      // Trying to view flaws without being signed in
+                      setAuthFeature('flaws');
+                      setShowAuthModal(true);
+                      return;
+                    }
+                    setResultsView(isRight ? 'strengths' : 'flaws');
+                    setSelectedFeatureId(null); // Clear selection when switching views
+                  }}
+                />
+                {/* Lock icon when not authenticated */}
+                {!isAuthenticated && resultsView === 'strengths' && (
+                  <svg className="w-4 h-4 text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                )}
+              </div>
               
               {/* Leaderboard buttons */}
               <div className="flex items-center gap-2">
@@ -633,6 +996,61 @@ export default function Home() {
               <FlawsList features={analysisResult.features} />
             </div>
 
+            {/* Mobile Potential Score Card - Only on mobile for logged-in users */}
+            {isAuthenticated && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="lg:hidden mt-3 bg-black rounded-xl border border-zinc-800 p-4"
+              >
+                <div className="flex flex-col items-center mb-3">
+                  <span className="text-xs text-zinc-500 mb-2">Your Potential</span>
+                  <div className="flex items-center justify-center gap-4 text-xs">
+                    <span 
+                      className="text-xl font-bold"
+                      style={{ 
+                        color: analysisResult.overallScore >= 8 ? '#22c55e' : 
+                               analysisResult.overallScore >= 6.5 ? '#84cc16' : 
+                               analysisResult.overallScore >= 5 ? '#eab308' : '#ef4444'
+                      }}
+                    >
+                      {analysisResult.overallScore.toFixed(1)}
+                    </span>
+                    <span className="text-zinc-500">→</span>
+                    <span className="text-xl font-bold text-[#22c55e]">
+                      {Math.min(10, analysisResult.overallScore + (protocols.reduce((sum, p) => sum + p.impactScore, 0) * 0.5)).toFixed(1)}
+                    </span>
+                  </div>
+                </div>
+                
+                {isPremium ? (
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={handleViewProtocol}
+                    className="w-full py-2.5 bg-gradient-to-r from-[#22c55e] to-[#16a34a] text-white text-sm font-semibold rounded-lg"
+                  >
+                    View Your Protocol
+                  </motion.button>
+                ) : (
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => {
+                      setPaymentFeature('protocol');
+                      setShowPaymentModal(true);
+                    }}
+                    className="w-full py-2.5 bg-gradient-to-r from-[#22c55e] to-[#16a34a] text-white text-sm font-semibold rounded-lg flex items-center justify-center gap-2"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                    Unlock Protocol - $9.99
+                  </motion.button>
+                )}
+              </motion.div>
+            )}
+
             {/* Leaderboard rank badge - shown after submission or for existing entry */}
             {(leaderboardSuccess || hasLeaderboardEntry) && (
               <motion.div
@@ -668,16 +1086,44 @@ export default function Home() {
       {/* Leaderboard Entry Modal */}
       <LeaderboardEntryModal
         isOpen={showLeaderboardEntry}
-        onClose={() => setShowLeaderboardEntry(false)}
+        onClose={() => {
+          setShowLeaderboardEntry(false);
+          setIsNewUserFlow(false);
+        }}
         onSubmit={handleLeaderboardSubmit}
         isSubmitting={isSubmittingToLeaderboard}
         defaultName={dbUser?.name || user?.user_metadata?.name || null}
+        isNewUser={isNewUserFlow}
       />
 
       {/* Leaderboard View */}
       <Leaderboard
         isOpen={showLeaderboard}
         onClose={() => setShowLeaderboard(false)}
+      />
+
+      {/* Share Modal */}
+      {analysisResult && capturedImage && (
+        <ShareModal
+          isOpen={showShareModal}
+          onClose={() => setShowShareModal(false)}
+          imageData={capturedImage}
+          analysisResult={analysisResult}
+        />
+      )}
+
+      {/* Payment Modal */}
+      <PaymentModal
+        isOpen={showPaymentModal}
+        onClose={() => setShowPaymentModal(false)}
+        onSuccess={async () => {
+          await refreshDbUser();
+          // Open protocol after successful payment
+          if (analysisResult) {
+            setShowProtocol(true);
+            fetchAiProtocols();
+          }
+        }}
       />
     </main>
   );

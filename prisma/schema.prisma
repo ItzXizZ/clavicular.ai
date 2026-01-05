@@ -154,3 +154,26 @@ model LeaderboardEntry {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
+
+// Shareable analysis results with 24hr expiration
+model ShareLink {
+  id              String   @id @default(cuid())
+  
+  // Image stored in Supabase storage
+  imageUrl        String
+  
+  // Analysis results
+  overallScore    Float
+  harmScore       Float
+  miscScore       Float
+  anguScore       Float
+  dimoScore       Float
+  rarity          String
+  features        String   // JSON stored as string - top features
+  
+  // Expiration - 24 hours from creation
+  expiresAt       DateTime
+  
+  // Timestamps
+  createdAt       DateTime @default(now())
+}

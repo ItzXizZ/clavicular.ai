@@ -321,12 +321,12 @@ export default function Leaderboard({ isOpen, onClose }: LeaderboardProps) {
                     <div>
                       <h4 className="text-sm font-medium text-zinc-400 mb-3">Top Features</h4>
                       <div className="space-y-2">
-                        {parseFeatures(selectedEntry.features).slice(0, 4).map((feature: { name: string; value: number; isStrength: boolean }, idx: number) => (
+                        {parseFeatures(selectedEntry.features).sort((a: { value: number }, b: { value: number }) => b.value - a.value).slice(0, 4).map((feature: { name: string; value: number; isStrength: boolean }, idx: number) => (
                           <div key={idx} className="flex items-center justify-between p-2 bg-zinc-900 border border-zinc-800 rounded-lg">
                             <span className="text-sm text-zinc-300">{feature.name}</span>
                             <span
                               className="text-sm font-medium"
-                              style={{ color: feature.isStrength ? '#22c55e' : '#ef4444' }}
+                              style={{ color: feature.value >= 5 ? '#22c55e' : '#ef4444' }}
                             >
                               {feature.value.toFixed(1)}
                             </span>

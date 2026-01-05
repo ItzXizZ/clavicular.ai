@@ -14,9 +14,11 @@ interface CameraCaptureProps {
   onCapture: (imageData: string, landmarks: Landmark[]) => void;
   flashlightOn?: boolean;
   onFlashlightToggle?: () => void;
+  onShareClick?: () => void;
+  hasResults?: boolean;
 }
 
-export default function CameraCapture({ onCapture, flashlightOn = false, onFlashlightToggle }: CameraCaptureProps) {
+export default function CameraCapture({ onCapture, flashlightOn = false, onFlashlightToggle, onShareClick, hasResults = false }: CameraCaptureProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -123,10 +125,6 @@ export default function CameraCapture({ onCapture, flashlightOn = false, onFlash
     };
   }, [facingMode, startCamera]);
 
-  // Flip camera function
-  const flipCamera = useCallback(() => {
-    setFacingMode(prev => prev === 'user' ? 'environment' : 'user');
-  }, []);
 
   const captureImage = useCallback(async () => {
     if (!videoRef.current || !canvasRef.current || !isReady) return;
@@ -338,32 +336,18 @@ export default function CameraCapture({ onCapture, flashlightOn = false, onFlash
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.9 }}
           onClick={onFlashlightToggle}
-          className={`w-11 h-11 rounded-full flex items-center justify-center transition-all duration-200 backdrop-blur-sm ${
-            flashlightOn 
-              ? 'bg-yellow-400 shadow-[0_0_20px_rgba(250,204,21,0.5)]' 
-              : 'bg-black/40 hover:bg-black/60'
-          }`}
+          className="w-11 h-11 rounded-full flex items-center justify-center transition-all duration-200 backdrop-blur-sm bg-black/40 hover:bg-black/60"
           title="Toggle flash"
         >
-          {flashlightOn ? (
-            <svg 
-              className="w-5 h-5 text-black" 
-              fill="currentColor" 
-              viewBox="0 0 24 24"
-            >
-              <path d="M11 21h-1l1-7H7.5c-.58 0-.57-.32-.38-.66l.1-.16L12 3h1l-1 7h3.5c.49 0 .56.33.47.51l-.07.15L11 21z" />
-            </svg>
-          ) : (
-            <svg 
-              className="w-5 h-5 text-zinc-400" 
-              fill="none" 
-              viewBox="0 0 24 24" 
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-          )}
+          <svg 
+            className={`w-5 h-5 transition-colors duration-200 ${flashlightOn ? 'text-yellow-400' : 'text-zinc-400'}`}
+            fill="none" 
+            viewBox="0 0 24 24" 
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
         </motion.button>
 
         {/* Capture button - Center */}
@@ -396,22 +380,27 @@ export default function CameraCapture({ onCapture, flashlightOn = false, onFlash
           )}
         </motion.button>
 
-        {/* Flip camera button - Right */}
+        {/* Share button - Right (disabled until results available) */}
         <motion.button
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.9 }}
-          onClick={flipCamera}
-          className="w-11 h-11 rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-sm flex items-center justify-center transition-all duration-200"
-          title="Flip camera"
+          whileHover={hasResults ? { scale: 1.1 } : {}}
+          whileTap={hasResults ? { scale: 0.9 } : {}}
+          onClick={hasResults ? onShareClick : undefined}
+          disabled={!hasResults}
+          className={`w-11 h-11 rounded-full backdrop-blur-sm flex items-center justify-center transition-all duration-200 ${
+            hasResults 
+              ? 'bg-black/40 hover:bg-black/60 cursor-pointer' 
+              : 'bg-black/20 cursor-not-allowed opacity-40'
+          }`}
+          title={hasResults ? "Share results" : "Take a photo first to share"}
         >
           <svg 
-            className="w-5 h-5 text-zinc-400" 
+            className={`w-5 h-5 ${hasResults ? 'text-[#22c55e]' : 'text-zinc-500'}`}
             fill="none" 
             viewBox="0 0 24 24" 
             stroke="currentColor"
             strokeWidth={2}
           >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
           </svg>
         </motion.button>
       </div>

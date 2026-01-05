@@ -10,6 +10,7 @@ interface LeaderboardEntryModalProps {
   isSubmitting: boolean;
   defaultName?: string | null;
   isUpdate?: boolean; // Whether this is an update to existing entry
+  isNewUser?: boolean; // Whether this is a new user being welcomed
 }
 
 export default function LeaderboardEntryModal({
@@ -19,6 +20,7 @@ export default function LeaderboardEntryModal({
   isSubmitting,
   defaultName,
   isUpdate = false,
+  isNewUser = false,
 }: LeaderboardEntryModalProps) {
   const [name, setName] = useState(defaultName || '');
   const [age, setAge] = useState('');
@@ -92,11 +94,21 @@ export default function LeaderboardEntryModal({
           >
             {/* Header */}
             <div className="p-6 border-b border-zinc-800">
+              {isNewUser && (
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-lg">🎉</span>
+                  <span className="text-sm font-medium text-[#22c55e]">Welcome to Clavicular.AI!</span>
+                </div>
+              )}
               <h2 className="text-xl font-bold text-white">
-                {isUpdate ? 'Update Your Entry' : 'Join the Leaderboard'}
+                {isUpdate ? 'Update Your Entry' : isNewUser ? 'Join the Leaderboard' : 'Join the Leaderboard'}
               </h2>
               <p className="text-sm text-zinc-400 mt-1">
-                {isUpdate ? 'Update your profile on the leaderboard' : 'Show off your score to the world'}
+                {isUpdate 
+                  ? 'Update your profile on the leaderboard' 
+                  : isNewUser 
+                  ? 'You\'re all set! Just add your age to see how you rank against others'
+                  : 'Show off your score to the world'}
               </p>
             </div>
 

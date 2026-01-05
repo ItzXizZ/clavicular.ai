@@ -10,6 +10,7 @@ interface AuthModalProps {
   onSuccess?: () => void;
   title?: string;
   description?: string;
+  pendingAction?: string; // Action to perform after OAuth redirect (e.g., 'flaws', 'leaderboard')
 }
 
 type AuthMode = 'signin' | 'signup' | 'forgot';
@@ -19,7 +20,8 @@ export default function AuthModal({
   onClose, 
   onSuccess,
   title = 'Sign in to continue',
-  description = 'Create an account or sign in to access this feature'
+  description = 'Create an account or sign in to access this feature',
+  pendingAction
 }: AuthModalProps) {
   const [mode, setMode] = useState<AuthMode>('signin');
   const [email, setEmail] = useState('');
@@ -80,7 +82,7 @@ export default function AuthModal({
     setIsLoading(true);
     setError(null);
     try {
-      await signInWithGoogle();
+      await signInWithGoogle(pendingAction);
       // OAuth redirects, so we don't need to handle success here
     } catch (err) {
       setError(getAuthErrorMessage(err as Parameters<typeof getAuthErrorMessage>[0]));

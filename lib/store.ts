@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import type { 
   AnalysisResult, 
   ViewMode, 
@@ -44,7 +45,7 @@ interface AppState {
 const initialState = {
   viewMode: 'camera' as ViewMode,
   profileMode: 'front' as ProfileMode,
-  resultsView: 'flaws' as ResultsView,
+  resultsView: 'strengths' as ResultsView,
   protocolType: 'softmax' as ProtocolType,
   showProtocol: false,
   isAnalyzing: false,
@@ -54,19 +55,34 @@ const initialState = {
   protocols: [],
 };
 
-export const useAppStore = create<AppState>((set) => ({
-  ...initialState,
-  
-  setViewMode: (mode) => set({ viewMode: mode }),
-  setProfileMode: (mode) => set({ profileMode: mode }),
-  setResultsView: (view) => set({ resultsView: view }),
-  setProtocolType: (type) => set({ protocolType: type }),
-  setShowProtocol: (show) => set({ showProtocol: show }),
-  setIsAnalyzing: (analyzing) => set({ isAnalyzing: analyzing }),
-  setAnalysisResult: (result) => set({ analysisResult: result }),
-  setCapturedImage: (image) => set({ capturedImage: image }),
-  setSelectedFeatureId: (id) => set({ selectedFeatureId: id }),
-  setProtocols: (protocols) => set({ protocols: protocols }),
-  reset: () => set(initialState),
-}));
+export const useAppStore = create<AppState>()(
+  persist(
+    (set) => ({
+      ...initialState,
+      
+      setViewMode: (mode) => set({ viewMode: mode }),
+      setProfileMode: (mode) => set({ profileMode: mode }),
+      setResultsView: (view) => set({ resultsView: view }),
+      setProtocolType: (type) => set({ protocolType: type }),
+      setShowProtocol: (show) => set({ showProtocol: show }),
+      setIsAnalyzing: (analyzing) => set({ isAnalyzing: analyzing }),
+      setAnalysisResult: (result) => set({ analysisResult: result }),
+      setCapturedImage: (image) => set({ capturedImage: image }),
+      setSelectedFeatureId: (id) => set({ selectedFeatureId: id }),
+      setProtocols: (protocols) => set({ protocols: protocols }),
+      reset: () => set(initialState),
+    }),
+    {
+      name: 'clavicular-analysis-storage',
+      // Only persist the analysis-related state, not UI state
+      partialize: (state) => ({
+        viewMode: state.viewMode,
+        analysisResult: state.analysisResult,
+        capturedImage: state.capturedImage,
+        protocols: state.protocols,
+        resultsView: state.resultsView,
+      }),
+    }
+  )
+);
 

@@ -38,13 +38,21 @@ export async function signIn(email: string, password: string) {
 }
 
 // Sign in with OAuth provider (Google)
-export async function signInWithGoogle() {
+export async function signInWithGoogle(pendingAction?: string) {
+  // Use environment variable if set, otherwise use current origin
+  // This allows proper redirect in both development (localhost) and production
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 
+    (typeof window !== 'undefined' ? window.location.origin : '');
+  
+  // Save pending action to sessionStorage so we can restore it after OAuth redirect
+  if (pendingAction && typeof window !== 'undefined') {
+    sessionStorage.setItem('auth_pending_action', pendingAction);
+  }
+  
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
-      redirectTo: typeof window !== 'undefined' 
-        ? `${window.location.origin}/auth/callback`
-        : undefined,
+      redirectTo: `${baseUrl}/auth/callback`,
     },
   });
 
@@ -83,10 +91,11 @@ export async function getUser() {
 
 // Send password reset email
 export async function resetPassword(email: string) {
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 
+    (typeof window !== 'undefined' ? window.location.origin : '');
+    
   const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: typeof window !== 'undefined' 
-      ? `${window.location.origin}/auth/reset-password`
-      : undefined,
+    redirectTo: `${baseUrl}/auth/reset-password`,
   });
 
   if (error) {

@@ -5,12 +5,59 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/lib/useAuth';
 import { signOut } from '@/lib/auth';
 import { authFetch } from '@/lib/apiClient';
-import AuthModal from './AuthModal';
+
+// Generate a unique color based on a string (name/email)
+function stringToColor(str: string): string {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  
+  // Generate HSL color with good saturation and lightness for visibility
+  const h = Math.abs(hash % 360);
+  return `hsl(${h}, 70%, 50%)`;
+}
+
+// Generate a lighter shade for gradient
+function stringToLightColor(str: string): string {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  
+  const h = Math.abs(hash % 360);
+  return `hsl(${h}, 60%, 65%)`;
+}
+
+interface DefaultAvatarProps {
+  name: string;
+  size?: 'sm' | 'md';
+}
+
+function DefaultAvatar({ name, size = 'md' }: DefaultAvatarProps) {
+  const initials = name.charAt(0).toUpperCase();
+  const color1 = stringToColor(name);
+  const color2 = stringToLightColor(name + 'salt');
+  
+  const sizeClasses = size === 'sm' 
+    ? 'w-9 h-9 text-sm' 
+    : 'w-10 h-10 text-base';
+  
+  return (
+    <div 
+      className={`${sizeClasses} rounded-full flex items-center justify-center text-white font-bold shadow-inner`}
+      style={{
+        background: `linear-gradient(135deg, ${color1} 0%, ${color2} 100%)`,
+      }}
+    >
+      {initials}
+    </div>
+  );
+}
 
 export default function UserMenu() {
   const { user, dbUser, isAuthenticated, isLoading, refreshDbUser } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
-  const [showAuthModal, setShowAuthModal] = useState(false);
   const [isToggling, setIsToggling] = useState(false);
   const [isHidden, setIsHidden] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -74,29 +121,14 @@ export default function UserMenu() {
     );
   }
 
-  // Not authenticated - show sign in button
+  // Not authenticated - don't show anything
   if (!isAuthenticated) {
-    return (
-      <>
-        <button
-          onClick={() => setShowAuthModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#22c55e] to-[#16a34a] hover:from-[#16a34a] hover:to-[#15803d] text-white text-sm font-medium rounded-xl transition-all shadow-lg shadow-green-500/20"
-        >
-          Sign In
-        </button>
-
-        <AuthModal
-          isOpen={showAuthModal}
-          onClose={() => setShowAuthModal(false)}
-        />
-      </>
-    );
+    return null;
   }
 
   // Authenticated - show user menu
   const displayName = dbUser?.displayName || dbUser?.name || user?.user_metadata?.name || user?.email?.split('@')[0] || 'User';
   const avatarUrl = dbUser?.avatarUrl || user?.user_metadata?.avatar_url;
-  const initials = displayName.charAt(0).toUpperCase();
 
   return (
     <div ref={menuRef} className="relative">
@@ -111,9 +143,7 @@ export default function UserMenu() {
             className="w-9 h-9 rounded-full object-cover border-2 border-zinc-700"
           />
         ) : (
-          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#22c55e] to-[#16a34a] flex items-center justify-center text-white font-semibold text-sm">
-            {initials}
-          </div>
+          <DefaultAvatar name={displayName} size="sm" />
         )}
       </button>
 
@@ -136,9 +166,7 @@ export default function UserMenu() {
                     className="w-10 h-10 rounded-full object-cover"
                   />
                 ) : (
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#22c55e] to-[#16a34a] flex items-center justify-center text-white font-semibold">
-                    {initials}
-                  </div>
+                  <DefaultAvatar name={displayName} size="md" />
                 )}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-white truncate">{displayName}</p>

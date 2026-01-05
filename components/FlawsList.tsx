@@ -84,9 +84,7 @@ export default function FlawsList({ features }: FlawsListProps) {
                     animate={isSelected ? { scale: [1, 1.3, 1] } : {}}
                     transition={{ duration: 0.3 }}
                   />
-                  <h4 className={`text-sm font-medium truncate transition-colors ${
-                    isSelected ? 'text-white' : 'text-white'
-                  }`}>
+                  <h4 className="text-sm font-medium truncate text-white">
                     {feature.name}
                   </h4>
                   {/* Indicator for clickable features */}
@@ -148,4 +146,3 @@ export default function FlawsList({ features }: FlawsListProps) {
     </div>
   );
 }
-
