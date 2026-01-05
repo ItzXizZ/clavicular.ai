@@ -19,11 +19,13 @@ interface CameraCaptureProps {
 export default function CameraCapture({ onCapture, flashlightOn = false, onFlashlightToggle }: CameraCaptureProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const [hasCamera, setHasCamera] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const [modelReady, setModelReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [detectionStatus, setDetectionStatus] = useState<'idle' | 'detecting' | 'success' | 'failed'>('idle');
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
   const { profileMode, isAnalyzing } = useAppStore();
 
   // Initialize MediaPipe Face Landmarker on mount
@@ -53,77 +55,77 @@ export default function CameraCapture({ onCapture, flashlightOn = false, onFlash
   }, []);
 
   // Initialize camera
+  const startCamera = useCallback(async (facing: 'user' | 'environment') => {
+    // Stop existing stream
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+    }
+
+    // Try different constraint options in order of preference
+    const constraintOptions = [
+      {
+        video: {
+          facingMode: facing,
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        }
+      },
+      {
+        video: {
+          facingMode: facing,
+          width: { ideal: 640 },
+          height: { ideal: 480 }
+        }
+      },
+      {
+        video: {
+          facingMode: facing
+        }
+      },
+      {
+        video: true
+      }
+    ];
+
+    for (const constraints of constraintOptions) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        streamRef.current = stream;
+
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.onloadedmetadata = () => {
+            videoRef.current?.play().catch(console.error);
+            setIsReady(true);
+          };
+        }
+        setHasCamera(true);
+        setError(null);
+        return; // Success, exit the loop
+      } catch (err) {
+        console.error('Camera attempt failed:', err);
+        // Continue to next constraint option
+      }
+    }
+
+    // All attempts failed
+    setError('Camera in use by another app. Close other apps using your camera and refresh.');
+    setHasCamera(false);
+  }, []);
+
   useEffect(() => {
-    let stream: MediaStream | null = null;
-    let isMounted = true;
-
-    const startCamera = async () => {
-      // Try different constraint options in order of preference
-      const constraintOptions = [
-        {
-          video: {
-            facingMode: 'user',
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
-          }
-        },
-        {
-          video: {
-            facingMode: 'user',
-            width: { ideal: 640 },
-            height: { ideal: 480 }
-          }
-        },
-        {
-          video: {
-            facingMode: 'user'
-          }
-        },
-        {
-          video: true
-        }
-      ];
-
-      for (const constraints of constraintOptions) {
-        try {
-          stream = await navigator.mediaDevices.getUserMedia(constraints);
-          
-          if (!isMounted) {
-            stream.getTracks().forEach(track => track.stop());
-            return;
-          }
-
-          if (videoRef.current) {
-            videoRef.current.srcObject = stream;
-            videoRef.current.onloadedmetadata = () => {
-              videoRef.current?.play().catch(console.error);
-              setIsReady(true);
-            };
-          }
-          setHasCamera(true);
-          setError(null);
-          return; // Success, exit the loop
-        } catch (err) {
-          console.error('Camera attempt failed:', err);
-          // Continue to next constraint option
-        }
-      }
-
-      // All attempts failed
-      if (isMounted) {
-        setError('Camera in use by another app. Close other apps using your camera and refresh.');
-        setHasCamera(false);
-      }
-    };
-
-    startCamera();
+    startCamera(facingMode);
 
     return () => {
-      isMounted = false;
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
       }
     };
+  }, [facingMode, startCamera]);
+
+  // Flip camera function
+  const flipCamera = useCallback(() => {
+    setFacingMode(prev => prev === 'user' ? 'environment' : 'user');
   }, []);
 
   const captureImage = useCallback(async () => {
@@ -143,9 +145,11 @@ export default function CameraCapture({ onCapture, flashlightOn = false, onFlash
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
 
-    // Mirror the image for front-facing camera
-    ctx.translate(canvas.width, 0);
-    ctx.scale(-1, 1);
+    // Mirror the image only for front-facing camera
+    if (facingMode === 'user') {
+      ctx.translate(canvas.width, 0);
+      ctx.scale(-1, 1);
+    }
     ctx.drawImage(video, 0, 0);
 
     const imageData = canvas.toDataURL('image/jpeg', 0.95);
@@ -188,14 +192,14 @@ export default function CameraCapture({ onCapture, flashlightOn = false, onFlash
         setError(null);
       }, 3000);
     }
-  }, [isReady, modelReady, onCapture]);
+  }, [isReady, modelReady, onCapture, facingMode]);
 
   const isButtonDisabled = !isReady || !modelReady || isAnalyzing || detectionStatus === 'detecting';
 
   return (
-    <div className="relative w-full h-full flex flex-col">
-      {/* Camera view area */}
-      <div className="relative flex-1 w-full min-h-0">
+    <div className="relative w-full h-full">
+      {/* Camera view area - full height */}
+      <div className="absolute inset-0">
         {/* Video feed - always rendered so ref is available */}
         <video
           ref={videoRef}
@@ -209,7 +213,7 @@ export default function CameraCapture({ onCapture, flashlightOn = false, onFlash
             width: '100%',
             height: '100%',
             objectFit: 'cover',
-            transform: 'scaleX(-1)',
+            transform: facingMode === 'user' ? 'scaleX(-1)' : 'none',
             display: hasCamera ? 'block' : 'none',
           }}
         />
@@ -236,11 +240,13 @@ export default function CameraCapture({ onCapture, flashlightOn = false, onFlash
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.5 }}
-                  className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-xs text-zinc-400 whitespace-nowrap"
+                  className="absolute -bottom-10 left-1/2 -translate-x-1/2 text-[10px] text-zinc-400 whitespace-nowrap text-center leading-tight"
                 >
                   {detectionStatus === 'detecting' ? 'Detecting face...' :
                    detectionStatus === 'failed' ? 'Try again' :
-                   profileMode === 'front' ? 'Center your face' : 'Turn to the side'}
+                   profileMode === 'front' ? (
+                    <>Center your face and<br />take a picture to be rated</>
+                   ) : 'Turn to the side'}
                 </motion.p>
               </motion.div>
             </div>
@@ -325,45 +331,87 @@ export default function CameraCapture({ onCapture, flashlightOn = false, onFlash
       {/* Hidden canvas for capture */}
       <canvas ref={canvasRef} className="hidden" />
 
-      {/* Capture button row */}
-      <div className="py-4 flex justify-center items-center gap-3">
+      {/* Camera controls row - floating over camera */}
+      <div className="absolute bottom-0 left-0 right-0 py-4 flex justify-center items-center gap-6 z-20">
+        {/* Flash button - Left */}
         <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={captureImage}
-          disabled={isButtonDisabled}
-          className="camera-btn px-8 py-3 rounded-lg text-black font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.9 }}
+          onClick={onFlashlightToggle}
+          className={`w-11 h-11 rounded-full flex items-center justify-center transition-all duration-200 backdrop-blur-sm ${
+            flashlightOn 
+              ? 'bg-yellow-400 shadow-[0_0_20px_rgba(250,204,21,0.5)]' 
+              : 'bg-black/40 hover:bg-black/60'
+          }`}
+          title="Toggle flash"
         >
-          {!modelReady ? 'Loading...' : 
-           detectionStatus === 'detecting' ? 'Detecting...' : 
-           'Rate Me'}
+          {flashlightOn ? (
+            <svg 
+              className="w-5 h-5 text-black" 
+              fill="currentColor" 
+              viewBox="0 0 24 24"
+            >
+              <path d="M11 21h-1l1-7H7.5c-.58 0-.57-.32-.38-.66l.1-.16L12 3h1l-1 7h3.5c.49 0 .56.33.47.51l-.07.15L11 21z" />
+            </svg>
+          ) : (
+            <svg 
+              className="w-5 h-5 text-zinc-400" 
+              fill="none" 
+              viewBox="0 0 24 24" 
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+          )}
         </motion.button>
 
-        {/* Flashlight button */}
+        {/* Capture button - Center */}
         <motion.button
-          whileHover={{ scale: 1.08 }}
+          whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
-          onClick={onFlashlightToggle}
-          className={`w-11 h-11 rounded-full flex items-center justify-center transition-all duration-200 ${
-            flashlightOn 
-              ? 'bg-yellow-400 shadow-[0_0_20px_rgba(250,204,21,0.6)]' 
-              : 'bg-zinc-700 hover:bg-zinc-600'
-          }`}
-          title="Toggle screen flash for low lighting"
+          onClick={captureImage}
+          disabled={isButtonDisabled}
+          className="relative w-16 h-16 rounded-full disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {/* Outer ring */}
+          <div className="absolute inset-0 rounded-full border-[3px] border-white/90" />
+          {/* Inner button */}
+          <motion.div 
+            className={`absolute inset-[5px] rounded-full transition-colors duration-200 ${
+              isButtonDisabled ? 'bg-zinc-500' : 'bg-white hover:bg-zinc-100'
+            }`}
+            animate={detectionStatus === 'detecting' ? { scale: [1, 0.95, 1] } : {}}
+            transition={{ duration: 0.5, repeat: detectionStatus === 'detecting' ? Infinity : 0 }}
+          />
+          {/* Loading spinner overlay */}
+          {detectionStatus === 'detecting' && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                className="w-7 h-7 border-2 border-zinc-400 border-t-zinc-700 rounded-full"
+              />
+            </div>
+          )}
+        </motion.button>
+
+        {/* Flip camera button - Right */}
+        <motion.button
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.9 }}
+          onClick={flipCamera}
+          className="w-11 h-11 rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-sm flex items-center justify-center transition-all duration-200"
+          title="Flip camera"
         >
           <svg 
-            className={`w-5 h-5 transition-colors ${flashlightOn ? 'text-black' : 'text-zinc-300'}`} 
+            className="w-5 h-5 text-zinc-400" 
             fill="none" 
             viewBox="0 0 24 24" 
             stroke="currentColor"
             strokeWidth={2}
           >
-            {/* Flashlight icon */}
-            <path 
-              strokeLinecap="round" 
-              strokeLinejoin="round" 
-              d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" 
-            />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
         </motion.button>
       </div>

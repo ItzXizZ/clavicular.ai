@@ -11,6 +11,39 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+// =====================================================
+// USER AUTHENTICATION & ACCOUNTS
+// =====================================================
+
+// Main user account - syncs with Supabase Auth
+model User {
+  id                String    @id // Uses Supabase Auth UUID
+  email             String    @unique
+  emailVerified     DateTime?
+  
+  // Profile info
+  name              String?
+  displayName       String?   // Shown on leaderboard
+  avatarUrl         String?
+  age               Int?
+  
+  // Access tier for gating features
+  accessTier        String    @default("REGISTERED") // FREE, REGISTERED, PREMIUM
+  
+  // User's data
+  analysisSessions  AnalysisSession[]
+  leaderboardEntry  LeaderboardEntry? // One entry per user
+  
+  // Timestamps
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  lastLoginAt       DateTime?
+}
+
+// =====================================================
+// FACIAL ANALYSIS DATA
+// =====================================================
+
 // Facial features and their ideal values
 model Feature {
   id                String   @id
@@ -78,9 +111,14 @@ model Product {
   updatedAt           DateTime      @updatedAt
 }
 
-// Store analysis sessions (optional, for future use)
+// Store analysis sessions - linked to user (optional for anonymous)
 model AnalysisSession {
   id              String   @id @default(cuid())
+  
+  // Link to user (optional - allows anonymous analysis)
+  userId          String?
+  user            User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
   overallScore    Float
   harmScore       Float
   miscScore       Float
@@ -93,9 +131,14 @@ model AnalysisSession {
   createdAt       DateTime @default(now())
 }
 
-// Public leaderboard entries
+// Public leaderboard entries - one per user
 model LeaderboardEntry {
   id              String   @id @default(cuid())
+  
+  // Link to user account (required for leaderboard)
+  userId          String?  @unique
+  user            User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
   name            String
   age             Int
   imageUrl        String   // Supabase storage URL
@@ -106,8 +149,8 @@ model LeaderboardEntry {
   dimoScore       Float
   rarity          String
   features        String   // JSON stored as string - top features
+  hidden          Boolean  @default(false) // User can hide from public leaderboard
   consentedAt     DateTime // When user consented to public display
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
-

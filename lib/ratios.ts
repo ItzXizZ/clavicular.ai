@@ -117,9 +117,13 @@ export function calculateMeasurements(
   const rightEyeUpper = landmarks[LANDMARK_INDICES.rightEyeUpper];
   const rightEyeLower = landmarks[LANDMARK_INDICES.rightEyeLower];
   
-  // Calculate eye centers using all 4 corners for precision
-  const leftEyeCenter = getCentroid([leftEyeInner, leftEyeOuter, leftEyeUpper, leftEyeLower]);
-  const rightEyeCenter = getCentroid([rightEyeInner, rightEyeOuter, rightEyeUpper, rightEyeLower]);
+  // Use actual pupil/iris center landmarks from MediaPipe (most accurate for IPD)
+  const leftPupil = landmarks[LANDMARK_INDICES.leftPupil];
+  const rightPupil = landmarks[LANDMARK_INDICES.rightPupil];
+  
+  // Fallback to centroid if pupil landmarks unavailable
+  const leftEyeCenter = leftPupil || getCentroid([leftEyeInner, leftEyeOuter, leftEyeUpper, leftEyeLower]);
+  const rightEyeCenter = rightPupil || getCentroid([rightEyeInner, rightEyeOuter, rightEyeUpper, rightEyeLower]);
   
   // Eyebrow landmarks
   const leftBrowInner = landmarks[LANDMARK_INDICES.leftBrowInner];

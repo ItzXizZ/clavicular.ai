@@ -8,17 +8,14 @@ export interface FeatureLandmarkConfig {
 }
 
 export const FEATURE_LANDMARK_MAP: Record<string, FeatureLandmarkConfig> = {
-  // IPD - Interpupillary Distance
+  // IPD - Interpupillary Distance (distance between pupil centers)
   ipd: {
     landmarkIndices: [
-      LANDMARK_INDICES.leftEyeInner,
-      LANDMARK_INDICES.leftEyeOuter,
-      LANDMARK_INDICES.rightEyeInner,
-      LANDMARK_INDICES.rightEyeOuter,
+      LANDMARK_INDICES.leftPupil,
+      LANDMARK_INDICES.rightPupil,
     ],
     connections: [
-      [LANDMARK_INDICES.leftEyeInner, LANDMARK_INDICES.leftEyeOuter],
-      [LANDMARK_INDICES.rightEyeInner, LANDMARK_INDICES.rightEyeOuter],
+      [LANDMARK_INDICES.leftPupil, LANDMARK_INDICES.rightPupil],
     ],
     color: '#3b82f6', // Blue
   },
@@ -145,11 +142,9 @@ export const FEATURE_LANDMARK_MAP: Record<string, FeatureLandmarkConfig> = {
     color: '#f97316', // Orange
   },
 
-  // Philtrum Length
-  philtrum_length: {
+  // Philtrum Length (feature ID: 'philtrum')
+  philtrum: {
     landmarkIndices: [
-      LANDMARK_INDICES.philtrumTop,
-      LANDMARK_INDICES.philtrumBottom,
       LANDMARK_INDICES.noseBase,
       LANDMARK_INDICES.upperLipTop,
     ],
@@ -159,8 +154,8 @@ export const FEATURE_LANDMARK_MAP: Record<string, FeatureLandmarkConfig> = {
     color: '#a855f7', // Purple
   },
 
-  // Facial Symmetry
-  facial_symmetry: {
+  // Facial Symmetry (feature ID: 'symmetry')
+  symmetry: {
     landmarkIndices: [
       LANDMARK_INDICES.leftEyeInner,
       LANDMARK_INDICES.rightEyeInner,
@@ -179,15 +174,15 @@ export const FEATURE_LANDMARK_MAP: Record<string, FeatureLandmarkConfig> = {
     color: '#84cc16', // Lime
   },
 
-  // Nasofrontal Angle
+  // Nasofrontal Angle (angle at nasion between glabella and nose tip)
   nasofrontal_angle: {
     landmarkIndices: [
-      LANDMARK_INDICES.forehead,
+      LANDMARK_INDICES.glabella,
       LANDMARK_INDICES.nasion,
       LANDMARK_INDICES.noseTip,
     ],
     connections: [
-      [LANDMARK_INDICES.forehead, LANDMARK_INDICES.nasion],
+      [LANDMARK_INDICES.glabella, LANDMARK_INDICES.nasion],
       [LANDMARK_INDICES.nasion, LANDMARK_INDICES.noseTip],
     ],
     color: '#0ea5e9', // Sky blue
@@ -210,8 +205,8 @@ export const FEATURE_LANDMARK_MAP: Record<string, FeatureLandmarkConfig> = {
     color: '#d946ef', // Fuchsia
   },
 
-  // Chin to Philtrum Ratio
-  chin_philtrum_ratio: {
+  // Chin to Philtrum Ratio (feature ID: 'chin_philtrum')
+  chin_philtrum: {
     landmarkIndices: [
       LANDMARK_INDICES.upperLipTop,
       LANDMARK_INDICES.lowerLipBottom,
@@ -235,6 +230,36 @@ export const FEATURE_LANDMARK_MAP: Record<string, FeatureLandmarkConfig> = {
       [LANDMARK_INDICES.leftGonion, LANDMARK_INDICES.rightGonion],
     ],
     color: '#8b5cf6', // Purple
+  },
+
+  // ESR - Eye Separation Ratio (IPD relative to face width)
+  esr: {
+    landmarkIndices: [
+      LANDMARK_INDICES.leftPupil,
+      LANDMARK_INDICES.rightPupil,
+      LANDMARK_INDICES.leftCheekbone,
+      LANDMARK_INDICES.rightCheekbone,
+    ],
+    connections: [
+      [LANDMARK_INDICES.leftPupil, LANDMARK_INDICES.rightPupil],
+      [LANDMARK_INDICES.leftCheekbone, LANDMARK_INDICES.rightCheekbone],
+    ],
+    color: '#06b6d4', // Cyan
+  },
+
+  // PFL - Palpebral Fissure Length (horizontal eye aperture width)
+  pfl: {
+    landmarkIndices: [
+      LANDMARK_INDICES.leftEyeInner,
+      LANDMARK_INDICES.leftEyeOuter,
+      LANDMARK_INDICES.rightEyeInner,
+      LANDMARK_INDICES.rightEyeOuter,
+    ],
+    connections: [
+      [LANDMARK_INDICES.leftEyeInner, LANDMARK_INDICES.leftEyeOuter],
+      [LANDMARK_INDICES.rightEyeInner, LANDMARK_INDICES.rightEyeOuter],
+    ],
+    color: '#f472b6', // Pink
   },
 };
 

@@ -12,7 +12,11 @@ import DisclaimerModal from '@/components/DisclaimerModal';
 import FaceVisualization from '@/components/FaceVisualization';
 import LeaderboardEntryModal from '@/components/LeaderboardEntryModal';
 import Leaderboard from '@/components/Leaderboard';
+import AuthModal from '@/components/AuthModal';
+import UserMenu from '@/components/UserMenu';
 import { useAppStore } from '@/lib/store';
+import { useAuth } from '@/lib/useAuth';
+import { authFetch } from '@/lib/apiClient';
 import type { Landmark } from '@/lib/types';
 
 export default function Home() {
@@ -20,6 +24,11 @@ export default function Home() {
   const [hasAcceptedDisclaimer, setHasAcceptedDisclaimer] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [flashlightOn, setFlashlightOn] = useState(false);
+  
+  // Auth state
+  const { isAuthenticated, isLoading: authLoading, dbUser, user, refreshDbUser } = useAuth();
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authFeature, setAuthFeature] = useState<'leaderboard' | 'protocol'>('leaderboard');
   
   // Leaderboard state
   const [showLeaderboard, setShowLeaderboard] = useState(false);
@@ -129,8 +138,106 @@ export default function Home() {
     setLeaderboardSuccess(null);
   };
 
+  // Handle gated actions - check auth first
+  const handleGatedAction = (feature: 'leaderboard' | 'protocol', callback: () => void) => {
+    if (isAuthenticated) {
+      callback();
+    } else {
+      setAuthFeature(feature);
+      setShowAuthModal(true);
+    }
+  };
+
+  // Handle viewing protocol (gated)
+  const handleViewProtocol = () => {
+    handleGatedAction('protocol', () => setShowProtocol(true));
+  };
+
+  // Check if user already has a leaderboard entry
+  const hasLeaderboardEntry = dbUser?.leaderboardEntry != null;
+
+  // Handle viewing leaderboard (gated)
+  const handleViewLeaderboard = () => {
+    handleGatedAction('leaderboard', () => {
+      setShowLeaderboard(true);
+    });
+  };
+
+  // Handle joining leaderboard for first time (gated)
+  const handleJoinLeaderboard = () => {
+    handleGatedAction('leaderboard', () => {
+      setShowLeaderboardEntry(true);
+    });
+  };
+
+  // Handle updating leaderboard entry (direct update without modal)
+  const handleUpdateLeaderboard = async () => {
+    if (!analysisResult || !capturedImage || !dbUser) return;
+
+    setIsSubmittingToLeaderboard(true);
+    try {
+      // Get top features for the entry
+      const topFeatures = analysisResult.features
+        .sort((a, b) => Math.abs(b.deviation) - Math.abs(a.deviation))
+        .slice(0, 6)
+        .map(f => ({
+          name: f.name,
+          value: f.value,
+          isStrength: f.isStrength,
+          category: f.category,
+        }));
+
+      // Use existing name and age from dbUser's leaderboard entry
+      const existingEntry = dbUser.leaderboardEntry;
+      const response = await authFetch('/api/leaderboard', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: dbUser.displayName || dbUser.name,
+          age: existingEntry?.age || dbUser.age || 25, // fallback age if not set
+          imageData: capturedImage,
+          overallScore: analysisResult.overallScore,
+          harmScore: analysisResult.categoryScores.harm,
+          miscScore: analysisResult.categoryScores.misc,
+          anguScore: analysisResult.categoryScores.angu,
+          dimoScore: analysisResult.categoryScores.dimo,
+          rarity: analysisResult.rarity,
+          features: topFeatures,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to update leaderboard');
+      }
+
+      const data = await response.json();
+      setLeaderboardSuccess({ rank: data.rank });
+      // Refresh user data to keep it in sync
+      await refreshDbUser();
+      // Show the leaderboard after successful update
+      setShowLeaderboard(true);
+    } catch (error) {
+      console.error('Error updating leaderboard:', error);
+      alert(error instanceof Error ? error.message : 'Failed to update leaderboard. Please try again.');
+    } finally {
+      setIsSubmittingToLeaderboard(false);
+    }
+  };
+
+  // Handle auth success - execute pending action
+  const handleAuthSuccess = () => {
+    setShowAuthModal(false);
+    // After successful auth, retry the action
+    if (authFeature === 'protocol') {
+      setShowProtocol(true);
+    } else if (authFeature === 'leaderboard') {
+      // Show leaderboard view - user can then choose to join or update
+      setShowLeaderboard(true);
+    }
+  };
+
   // Handle leaderboard entry submission
-  const handleLeaderboardSubmit = async (name: string, age: number) => {
+  const handleLeaderboardSubmit = async (name: string | null, age: number) => {
     if (!analysisResult || !capturedImage) return;
 
     setIsSubmittingToLeaderboard(true);
@@ -146,11 +253,11 @@ export default function Home() {
           category: f.category,
         }));
 
-      const response = await fetch('/api/leaderboard', {
+      const response = await authFetch('/api/leaderboard', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name,
+          // If name is null, the API will use the user's Google name from the database
+          name: name || undefined,
           age,
           imageData: capturedImage,
           overallScore: analysisResult.overallScore,
@@ -164,35 +271,32 @@ export default function Home() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to submit to leaderboard');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to submit to leaderboard');
       }
 
       const data = await response.json();
       setLeaderboardSuccess({ rank: data.rank });
       setShowLeaderboardEntry(false);
+      // Refresh user data so the UI updates to show "Update" button
+      await refreshDbUser();
       // Automatically open the leaderboard after successful submission
       setShowLeaderboard(true);
     } catch (error) {
       console.error('Error submitting to leaderboard:', error);
-      alert('Failed to submit to leaderboard. Please try again.');
+      alert(error instanceof Error ? error.message : 'Failed to submit to leaderboard. Please try again.');
     } finally {
       setIsSubmittingToLeaderboard(false);
     }
   };
 
-  // Handle clicking leaderboard button - show entry form first if not submitted
-  const handleOpenLeaderboard = () => {
-    if (leaderboardSuccess) {
-      // Already submitted, just show leaderboard
-      setShowLeaderboard(true);
-    } else {
-      // Need to submit first - show entry form
-      setShowLeaderboardEntry(true);
-    }
-  };
-
   return (
     <main className="min-h-screen bg-[#0c0c0f] flex flex-col lg:flex-row items-center justify-center gap-8 p-6 lg:p-12 relative overflow-hidden">
+      {/* User Menu - Top Right */}
+      <div className="absolute top-4 right-4 z-30">
+        <UserMenu />
+      </div>
+
       {/* Flashlight glow ring effect */}
       <AnimatePresence>
         {flashlightOn && viewMode === 'camera' && (
@@ -228,9 +332,22 @@ export default function Home() {
         onAccept={handleAcceptDisclaimer} 
       />
 
-      {/* EXPANDED PROTOCOL VIEW - Full screen overlay */}
+      {/* Auth Modal */}
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        onSuccess={handleAuthSuccess}
+        title={authFeature === 'leaderboard' ? 'Sign in for Leaderboard' : 'Sign in for Protocol'}
+        description={
+          authFeature === 'leaderboard' 
+            ? 'Create a free account to view and join the leaderboard' 
+            : 'Create a free account to view your personalized improvement protocol'
+        }
+      />
+
+      {/* EXPANDED PROTOCOL VIEW - Full screen overlay (only if authenticated) */}
       <AnimatePresence>
-        {showProtocol && viewMode === 'results' && analysisResult && (
+        {showProtocol && viewMode === 'results' && analysisResult && isAuthenticated && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -344,27 +461,12 @@ export default function Home() {
           Welcome to <span className="text-[#22c55e]">Clavicular.AI</span>
         </h1>
         <p className="text-zinc-500 text-sm lg:text-base hidden lg:block">
-          AI-powered facial analysis using MediaPipe Face Mesh with 478 landmark detection for precise, scientific measurements.
+          Find out where you really stand. Get your face rated and see how you stack up on the leaderboard.
         </p>
       </motion.div>
 
       {/* iPhone with Camera/Results */}
       <div className="flex flex-col items-center gap-4">
-        {/* Profile toggle (above phone) */}
-        {viewMode === 'camera' && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
-            <ToggleSwitch
-              leftLabel="Front"
-              rightLabel="Side"
-              isRight={profileMode === 'side'}
-              onChange={(isRight) => setProfileMode(isRight ? 'side' : 'front')}
-            />
-          </motion.div>
-        )}
-
         {/* Error display */}
         <AnimatePresence>
           {analysisError && viewMode === 'camera' && (
@@ -449,15 +551,6 @@ export default function Home() {
                   </div>
                 )}
 
-                {/* New analysis button */}
-                <div className="absolute bottom-4 left-4 right-4 z-10">
-                  <button
-                    onClick={handleBackToCamera}
-                    className="w-full py-2 px-4 bg-zinc-800/90 hover:bg-zinc-700 backdrop-blur-sm text-white text-sm font-medium rounded-lg transition-colors border border-zinc-700"
-                  >
-                    New Analysis
-                  </button>
-                </div>
               </motion.div>
             )}
           </AnimatePresence>
@@ -473,7 +566,7 @@ export default function Home() {
             exit={{ opacity: 0, x: 20 }}
             className="w-full lg:w-[380px] lg:flex-shrink-0"
           >
-            {/* Toggle between flaws/strengths + Leaderboard button */}
+            {/* Toggle between flaws/strengths + Leaderboard buttons */}
             <div className="flex items-center justify-between mb-4">
               <ToggleSwitch
                 leftLabel="Flaws"
@@ -485,24 +578,76 @@ export default function Home() {
                 }}
               />
               
-              {/* Leaderboard button */}
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={handleOpenLeaderboard}
-                className={`flex items-center gap-2 px-3 py-1.5 border rounded-lg transition-all ${
-                  leaderboardSuccess 
-                    ? 'bg-gradient-to-r from-amber-500/30 to-orange-500/30 border-amber-500/50' 
-                    : 'bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 border-amber-500/30'
-                }`}
-              >
-                <svg className="w-4 h-4 text-amber-400" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 2C13.1 2 14 2.9 14 4V5H19C19.55 5 20 5.45 20 6V8C20 10.21 18.21 12 16 12H15.9C15.5 13.85 13.96 15.25 12.1 15.46V17H15C15.55 17 16 17.45 16 18V21C16 21.55 15.55 22 15 22H9C8.45 22 8 21.55 8 21V18C8 17.45 8.45 17 9 17H10V15.46C8.04 15.25 6.5 13.85 6.1 12H6C3.79 12 2 10.21 2 8V6C2 5.45 2.45 5 3 5H8V4C8 2.9 8.9 2 10 2H12Z" />
-                </svg>
-                <span className="text-sm font-medium text-amber-400">
-                  {leaderboardSuccess ? `#${leaderboardSuccess.rank}` : 'Leaderboard'}
-                </span>
-              </motion.button>
+              {/* Leaderboard buttons */}
+              <div className="flex items-center gap-2">
+                {/* View Leaderboard button - always available */}
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={handleViewLeaderboard}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-black border border-white/30 hover:border-white/50 rounded-lg transition-all"
+                >
+                  {!isAuthenticated && (
+                    <svg className="w-3 h-3 text-[#22c55e]/70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                  )}
+                  <svg className="w-4 h-4 text-[#22c55e]" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 2C13.1 2 14 2.9 14 4V5H19C19.55 5 20 5.45 20 6V8C20 10.21 18.21 12 16 12H15.9C15.5 13.85 13.96 15.25 12.1 15.46V17H15C15.55 17 16 17.45 16 18V21C16 21.55 15.55 22 15 22H9C8.45 22 8 21.55 8 21V18C8 17.45 8.45 17 9 17H10V15.46C8.04 15.25 6.5 13.85 6.1 12H6C3.79 12 2 10.21 2 8V6C2 5.45 2.45 5 3 5H8V4C8 2.9 8.9 2 10 2H12Z" />
+                  </svg>
+                </motion.button>
+
+                {/* Join/Update button - depends on existing entry */}
+                {isAuthenticated ? (
+                  hasLeaderboardEntry ? (
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={handleUpdateLeaderboard}
+                      disabled={isSubmittingToLeaderboard}
+                      className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-[#22c55e] to-[#16a34a] hover:from-[#16a34a] hover:to-[#15803d] text-white text-sm font-medium rounded-lg transition-all shadow-lg shadow-green-500/20 disabled:opacity-50"
+                    >
+                      {isSubmittingToLeaderboard ? (
+                        <>
+                          <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                          </svg>
+                          <span>Updating...</span>
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                          <span>Update</span>
+                        </>
+                      )}
+                    </motion.button>
+                  ) : (
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={handleJoinLeaderboard}
+                      className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-[#22c55e] to-[#16a34a] hover:from-[#16a34a] hover:to-[#15803d] text-white text-sm font-medium rounded-lg transition-all shadow-lg shadow-green-500/20"
+                    >
+                      <span>Join</span>
+                    </motion.button>
+                  )
+                ) : (
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={handleJoinLeaderboard}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-black border border-[#22c55e]/50 hover:border-[#22c55e] text-[#22c55e] text-sm font-medium rounded-lg transition-all"
+                  >
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                    <span>Join</span>
+                  </motion.button>
+                )}
+              </div>
             </div>
 
             {/* Content area */}
@@ -510,38 +655,28 @@ export default function Home() {
               <FlawsList features={analysisResult.features} />
             </div>
 
-            {/* Protocol button - opens expanded view */}
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => setShowProtocol(true)}
-              className="w-full mt-4 py-4 px-6 bg-gradient-to-r from-[#22c55e] to-[#16a34a] hover:from-[#16a34a] hover:to-[#15803d] text-white font-semibold rounded-xl transition-all shadow-lg shadow-green-500/20"
-            >
-              <span>View Improvement Protocol</span>
-              <p className="text-green-200/70 text-xs mt-1">
-                Personalized recommendations to boost your score
-              </p>
-            </motion.button>
-
-            {/* Leaderboard rank badge - shown after submission */}
-            {leaderboardSuccess && (
+            {/* Leaderboard rank badge - shown after submission or for existing entry */}
+            {(leaderboardSuccess || hasLeaderboardEntry) && (
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="w-full mt-3 py-3 px-6 bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/30 rounded-xl"
+                className="w-full mt-3 py-3 px-6 bg-black border border-[#22c55e]/30 rounded-xl"
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <svg className="w-5 h-5 text-amber-400" fill="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4 text-[#22c55e]" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M12 2C13.1 2 14 2.9 14 4V5H19C19.55 5 20 5.45 20 6V8C20 10.21 18.21 12 16 12H15.9C15.5 13.85 13.96 15.25 12.1 15.46V17H15C15.55 17 16 17.45 16 18V21C16 21.55 15.55 22 15 22H9C8.45 22 8 21.55 8 21V18C8 17.45 8.45 17 9 17H10V15.46C8.04 15.25 6.5 13.85 6.1 12H6C3.79 12 2 10.21 2 8V6C2 5.45 2.45 5 3 5H8V4C8 2.9 8.9 2 10 2H12Z" />
                     </svg>
-                    <span className="text-amber-400 font-semibold">
-                      You&apos;re ranked #{leaderboardSuccess.rank}!
+                    <span className="text-[#22c55e] font-semibold">
+                      {leaderboardSuccess 
+                        ? `You're ranked #${leaderboardSuccess.rank}!`
+                        : `Score: ${dbUser?.leaderboardEntry?.overallScore.toFixed(1)}/10`
+                      }
                     </span>
                   </div>
                   <button
                     onClick={() => setShowLeaderboard(true)}
-                    className="text-amber-500/80 text-sm hover:text-amber-400 transition-colors"
+                    className="text-[#22c55e]/80 text-sm hover:text-[#22c55e] transition-colors"
                   >
                     View →
                   </button>
@@ -558,6 +693,7 @@ export default function Home() {
         onClose={() => setShowLeaderboardEntry(false)}
         onSubmit={handleLeaderboardSubmit}
         isSubmitting={isSubmittingToLeaderboard}
+        defaultName={dbUser?.name || user?.user_metadata?.name || null}
       />
 
       {/* Leaderboard View */}

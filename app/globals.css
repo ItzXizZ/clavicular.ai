@@ -143,14 +143,14 @@ body {
 
 /* Card hover effects */
 .feature-card {
-  background: var(--card);
-  border: 1px solid var(--border);
+  background: #000000;
+  border: 1px solid rgba(255, 255, 255, 0.3);
   transition: all 0.2s ease;
 }
 
 .feature-card:hover {
-  background: var(--card-hover);
-  border-color: var(--accent);
+  background: #000000;
+  border-color: rgba(255, 255, 255, 0.5);
   transform: translateY(-1px);
 }
 

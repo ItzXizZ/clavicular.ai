@@ -9,11 +9,11 @@ interface FlawsListProps {
   features: FeatureAnalysis[];
 }
 
-const categoryColors: Record<string, string> = {
-  HARM: '#3b82f6', // Blue
-  MISC: '#8b5cf6', // Purple
-  ANGU: '#f59e0b', // Amber
-  DIMO: '#22c55e', // Green
+// Get color based on score value - consistent coloring
+const getScoreColor = (value: number, isStrength: boolean) => {
+  if (isStrength) return '#22c55e'; // Green for strengths
+  if (value >= 5) return '#f59e0b'; // Amber for moderate flaws
+  return '#ef4444'; // Red for significant flaws
 };
 
 const importanceOrder = { highest: 0, high: 1, medium: 2, low: 3 };
@@ -54,7 +54,8 @@ export default function FlawsList({ features }: FlawsListProps) {
       {filteredFeatures.map((feature, index) => {
         const isSelected = selectedFeatureId === feature.id;
         const hasLandmarkMapping = !!FEATURE_LANDMARK_MAP[feature.id];
-        const highlightColor = FEATURE_LANDMARK_MAP[feature.id]?.color || categoryColors[feature.category];
+        const scoreColor = getScoreColor(feature.value, feature.isStrength);
+        const highlightColor = FEATURE_LANDMARK_MAP[feature.id]?.color || scoreColor;
         
         return (
           <motion.div
@@ -64,11 +65,11 @@ export default function FlawsList({ features }: FlawsListProps) {
             transition={{ delay: index * 0.05 }}
             onClick={() => hasLandmarkMapping && handleFeatureClick(feature.id)}
             className={`feature-card rounded-lg p-3 transition-all duration-200 ${
-              hasLandmarkMapping ? 'cursor-pointer hover:bg-zinc-800/80' : ''
+              hasLandmarkMapping ? 'cursor-pointer' : ''
             } ${isSelected ? 'ring-2' : ''}`}
             style={{
               ringColor: isSelected ? highlightColor : undefined,
-              backgroundColor: isSelected ? `${highlightColor}15` : undefined,
+              backgroundColor: isSelected ? `${highlightColor}15` : '#000000',
             }}
             whileHover={hasLandmarkMapping ? { scale: 1.01 } : undefined}
             whileTap={hasLandmarkMapping ? { scale: 0.99 } : undefined}
@@ -79,7 +80,7 @@ export default function FlawsList({ features }: FlawsListProps) {
                 <div className="flex items-center gap-2">
                   <motion.span 
                     className="w-2 h-2 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: isSelected ? highlightColor : categoryColors[feature.category] }}
+                    style={{ backgroundColor: isSelected ? highlightColor : scoreColor }}
                     animate={isSelected ? { scale: [1, 1.3, 1] } : {}}
                     transition={{ duration: 0.3 }}
                   />
@@ -121,11 +122,7 @@ export default function FlawsList({ features }: FlawsListProps) {
               <div className="flex flex-col items-end">
                 <span 
                   className="text-lg font-semibold"
-                  style={{
-                    color: isSelected ? highlightColor :
-                           feature.isStrength ? '#22c55e' : 
-                           Math.abs(feature.deviation) > 0.5 ? '#ef4444' : '#f59e0b'
-                  }}
+                  style={{ color: isSelected ? highlightColor : scoreColor }}
                 >
                   {feature.value.toFixed(1)}
                 </span>
@@ -142,11 +139,7 @@ export default function FlawsList({ features }: FlawsListProps) {
                 animate={{ width: `${Math.min(100, (feature.value / 10) * 100)}%` }}
                 transition={{ delay: index * 0.05 + 0.2, duration: 0.3 }}
                 className="h-full rounded-full"
-                style={{
-                  backgroundColor: isSelected ? highlightColor :
-                                 feature.isStrength ? '#22c55e' : 
-                                 Math.abs(feature.deviation) > 0.5 ? '#ef4444' : '#f59e0b'
-                }}
+                style={{ backgroundColor: isSelected ? highlightColor : scoreColor }}
               />
             </div>
           </motion.div>

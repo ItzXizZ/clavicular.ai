@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { verifyAuth } from '@/lib/authMiddleware';
 import type { ProtocolRecommendation, Product } from '@/lib/types';
 
 interface RecommendationsRequest {
@@ -26,7 +27,18 @@ interface ImprovementDetail {
   products: Product[];
 }
 
+// POST - Get recommendations (requires auth)
 export async function POST(request: NextRequest): Promise<NextResponse<RecommendationsResponse | { error: string }>> {
+  // Verify authentication
+  const { user, error } = await verifyAuth(request);
+  
+  if (!user) {
+    return NextResponse.json(
+      { error: error || 'Authentication required to view recommendations' },
+      { status: 401 }
+    );
+  }
+
   try {
     const body: RecommendationsRequest = await request.json();
     const { featureIds, issueIds, protocolType = 'softmax' } = body;
@@ -160,7 +172,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<Recommend
 }
 
 /**
- * GET endpoint to fetch all available issues and features
+ * GET endpoint to fetch all available issues and features (public)
  */
 export async function GET(): Promise<NextResponse> {
   try {
@@ -211,4 +223,3 @@ function calculateImpactFromEffectiveness(effectiveness: string | null): number 
   if (lower.includes('low')) return 0.2;
   return 0.3;
 }
-
