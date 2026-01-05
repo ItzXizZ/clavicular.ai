@@ -66,9 +66,9 @@ export default function FlawsList({ features }: FlawsListProps) {
             onClick={() => hasLandmarkMapping && handleFeatureClick(feature.id)}
             className={`feature-card rounded-lg p-3 transition-all duration-200 ${
               hasLandmarkMapping ? 'cursor-pointer' : ''
-            } ${isSelected ? 'ring-2' : ''}`}
+            }`}
             style={{
-              ringColor: isSelected ? highlightColor : undefined,
+              boxShadow: isSelected ? `0 0 0 2px ${highlightColor}` : undefined,
               backgroundColor: isSelected ? `${highlightColor}15` : '#000000',
             }}
             whileHover={hasLandmarkMapping ? { scale: 1.01 } : undefined}
