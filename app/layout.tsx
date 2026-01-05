@@ -10,6 +10,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Clavicular.AI - Facial Analysis",
   description: "AI-powered facial analysis and improvement recommendations",
+  icons: {
+    icon: "/black-white-icon-hooded-man-600nw-2631452863.webp",
+    shortcut: "/black-white-icon-hooded-man-600nw-2631452863.webp",
+    apple: "/black-white-icon-hooded-man-600nw-2631452863.webp",
+  },
 };
 
 export default function RootLayout({
