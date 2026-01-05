@@ -154,9 +154,6 @@ export async function POST(request: NextRequest) {
     });
 
     if (existingEntry) {
-      // Always update profile info (name, age, photo) and update score if higher
-      const shouldUpdateScore = overallScore > existingEntry.overallScore;
-      
       // Generate unique filename
       const timestamp = Date.now();
       const sanitizedName = name.toLowerCase().replace(/[^a-z0-9]/g, '-');
@@ -172,31 +169,27 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Update the entry - always update profile, only update score if higher
+      // Update the entry - always update everything including score
       const updatedEntry = await prisma.leaderboardEntry.update({
         where: { userId: user.id },
         data: {
           name: name.trim(),
           age: ageNum,
           imageUrl,
-          // Only update scores if new score is higher
-          ...(shouldUpdateScore && {
-            overallScore: parseFloat(overallScore),
-            harmScore: parseFloat(harmScore) || 0,
-            miscScore: parseFloat(miscScore) || 0,
-            anguScore: parseFloat(anguScore) || 0,
-            dimoScore: parseFloat(dimoScore) || 0,
-            rarity: rarity || 'Unknown',
-            features: JSON.stringify(features || []),
-          }),
+          overallScore: parseFloat(overallScore),
+          harmScore: parseFloat(harmScore) || 0,
+          miscScore: parseFloat(miscScore) || 0,
+          anguScore: parseFloat(anguScore) || 0,
+          dimoScore: parseFloat(dimoScore) || 0,
+          rarity: rarity || 'Unknown',
+          features: JSON.stringify(features || []),
         }
       });
 
-      // Get the user's rank based on their current score
-      const currentScore = shouldUpdateScore ? parseFloat(overallScore) : existingEntry.overallScore;
+      // Get the user's rank based on new score
       const rankResult = await prisma.$queryRaw<[{ count: bigint }]>`
         SELECT COUNT(*) as count FROM "LeaderboardEntry"
-        WHERE "overallScore" > ${currentScore}
+        WHERE "overallScore" > ${parseFloat(overallScore)}
       `;
       
       const rank = Number(rankResult[0].count) + 1;
@@ -206,8 +199,7 @@ export async function POST(request: NextRequest) {
         entry: updatedEntry,
         rank,
         updated: true,
-        scoreUpdated: shouldUpdateScore,
-        message: shouldUpdateScore ? 'Profile and score updated!' : 'Profile updated! (Previous score was higher)',
+        message: 'Leaderboard entry updated!',
       });
     }
 
