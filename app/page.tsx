@@ -8,7 +8,6 @@ import ToggleSwitch from '@/components/ToggleSwitch';
 import ScoreDisplay from '@/components/ScoreDisplay';
 import FlawsList from '@/components/FlawsList';
 import ProtocolRecommendation from '@/components/ProtocolRecommendation';
-import DisclaimerModal from '@/components/DisclaimerModal';
 import FaceVisualization from '@/components/FaceVisualization';
 import LeaderboardEntryModal from '@/components/LeaderboardEntryModal';
 import Leaderboard from '@/components/Leaderboard';
@@ -20,8 +19,6 @@ import { authFetch } from '@/lib/apiClient';
 import type { Landmark } from '@/lib/types';
 
 export default function Home() {
-  const [showDisclaimer, setShowDisclaimer] = useState(true);
-  const [hasAcceptedDisclaimer, setHasAcceptedDisclaimer] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [flashlightOn, setFlashlightOn] = useState(false);
   
@@ -58,20 +55,6 @@ export default function Home() {
     setProtocols,
   } = useAppStore();
 
-  // Check localStorage for disclaimer acceptance
-  useEffect(() => {
-    const accepted = localStorage.getItem('clavicular-disclaimer-accepted');
-    if (accepted === 'true') {
-      setShowDisclaimer(false);
-      setHasAcceptedDisclaimer(true);
-    }
-  }, []);
-
-  const handleAcceptDisclaimer = () => {
-    localStorage.setItem('clavicular-disclaimer-accepted', 'true');
-    setShowDisclaimer(false);
-    setHasAcceptedDisclaimer(true);
-  };
 
   // Handle image capture and analysis with real landmarks
   const handleCapture = useCallback(async (imageData: string, landmarks: Landmark[]) => {
@@ -326,11 +309,6 @@ export default function Home() {
         )}
       </AnimatePresence>
 
-      {/* Disclaimer Modal */}
-      <DisclaimerModal 
-        isOpen={showDisclaimer} 
-        onAccept={handleAcceptDisclaimer} 
-      />
 
       {/* Auth Modal */}
       <AuthModal
