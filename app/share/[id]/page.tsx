@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import AdBanner from '@/components/AdBanner';
 
 interface ShareData {
   imageUrl: string;
@@ -352,7 +353,7 @@ export default function SharePage() {
 
               {/* Top features */}
               {data.features && data.features.length > 0 && (
-                <div className="bg-black border border-zinc-800 rounded-2xl p-4 mb-6 lg:mb-0">
+                <div className="bg-black border border-zinc-800 rounded-2xl p-4 mb-4 lg:mb-4">
                   <p className="text-xs text-zinc-500 uppercase tracking-wider mb-3">Top Features</p>
                   <div className="space-y-2">
                     {[...data.features].sort((a, b) => b.value - a.value).slice(0, 4).map((feature, idx) => (
@@ -369,6 +370,15 @@ export default function SharePage() {
                   </div>
                 </div>
               )}
+
+              {/* Ad Banner - Strategic placement after content, before CTA */}
+              <div className="mb-4">
+                <AdBanner 
+                  format="banner" 
+                  slot="share-page-banner"
+                  className="mx-auto"
+                />
+              </div>
 
               {/* CTA Button - Mobile only */}
               <div className="lg:hidden">

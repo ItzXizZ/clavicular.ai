@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist_Mono } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 
 const geistMono = Geist_Mono({
@@ -28,6 +29,13 @@ export default function RootLayout({
         <link
           href="https://api.fontshare.com/v2/css?f[]=satoshi@700,500,400&display=swap"
           rel="stylesheet"
+        />
+        {/* Google AdSense */}
+        <Script
+          async
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5633162123365401"
+          crossOrigin="anonymous"
+          strategy="afterInteractive"
         />
       </head>
       <body className={`${geistMono.variable} antialiased`}>

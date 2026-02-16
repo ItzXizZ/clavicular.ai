@@ -33,7 +33,6 @@ export async function GET(request: NextRequest) {
       FROM "LeaderboardEntry"
       WHERE "hidden" = false
       ORDER BY "overallScore" DESC
-      LIMIT 100
     `;
 
     return NextResponse.json({ entries });

@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { authFetch } from '@/lib/apiClient';
+import { NativeAdCard } from '@/components/AdBanner';
 
 interface LeaderboardEntry {
   id: string;
@@ -186,54 +187,67 @@ export default function Leaderboard({ isOpen, onClose }: LeaderboardProps) {
               </div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-5 pt-3 px-1">
-                {entries.map((entry, index) => (
-                  <motion.div
-                    key={entry.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                    onClick={() => setSelectedEntry(entry)}
-                    className="relative group cursor-pointer overflow-visible"
-                  >
-                    {getRankBadge(index + 1)}
-                    <div className={`aspect-[3/4] rounded-2xl overflow-hidden bg-zinc-900 border transition-all duration-300 ${
-                      index === 0 ? 'border-[#22c55e]/50 shadow-lg shadow-green-500/10' :
-                      index === 1 ? 'border-slate-400/30' :
-                      index === 2 ? 'border-zinc-500/30' :
-                      'border-zinc-800 group-hover:border-zinc-600'
-                    }`}>
-                      {/* Image */}
-                      <div className="relative w-full h-full">
-                        <img
-                          src={entry.imageUrl}
-                          alt={entry.name}
-                          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                        />
-                        {/* Gradient overlay */}
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
-                        
-                        {/* Info overlay */}
-                        <div className="absolute bottom-0 left-0 right-0 p-3">
-                          <div className="flex items-end justify-between gap-2">
-                            <div className="min-w-0">
-                              <p className="text-white font-semibold text-sm truncate">{entry.name}</p>
-                              <p className="text-zinc-400 text-xs">{entry.age} years</p>
-                            </div>
-                            <div className="flex-shrink-0 text-right">
-                              <span
-                                className="text-lg font-bold"
-                                style={{ color: getScoreColor(entry.overallScore) }}
-                              >
-                                {entry.overallScore.toFixed(1)}
-                              </span>
-                              <span className="text-zinc-500 text-xs block">/10</span>
+                {entries.map((entry, index) => {
+                  // Insert native ad after position 5 and 15 (less intrusive)
+                  const showAdAfter = index === 4 || index === 14;
+                  
+                  return (
+                    <React.Fragment key={entry.id}>
+                      <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.05 }}
+                        onClick={() => setSelectedEntry(entry)}
+                        className="relative group cursor-pointer overflow-visible"
+                      >
+                        {getRankBadge(index + 1)}
+                        <div className={`aspect-[3/4] rounded-2xl overflow-hidden bg-zinc-900 border transition-all duration-300 ${
+                          index === 0 ? 'border-[#22c55e]/50 shadow-lg shadow-green-500/10' :
+                          index === 1 ? 'border-slate-400/30' :
+                          index === 2 ? 'border-zinc-500/30' :
+                          'border-zinc-800 group-hover:border-zinc-600'
+                        }`}>
+                          {/* Image */}
+                          <div className="relative w-full h-full">
+                            <img
+                              src={entry.imageUrl}
+                              alt={entry.name}
+                              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                            />
+                            {/* Gradient overlay */}
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
+                            
+                            {/* Info overlay */}
+                            <div className="absolute bottom-0 left-0 right-0 p-3">
+                              <div className="flex items-end justify-between gap-2">
+                                <div className="min-w-0">
+                                  <p className="text-white font-semibold text-sm truncate">{entry.name}</p>
+                                  <p className="text-zinc-400 text-xs">{entry.age} years</p>
+                                </div>
+                                <div className="flex-shrink-0 text-right">
+                                  <span
+                                    className="text-lg font-bold"
+                                    style={{ color: getScoreColor(entry.overallScore) }}
+                                  >
+                                    {entry.overallScore.toFixed(1)}
+                                  </span>
+                                  <span className="text-zinc-500 text-xs block">/10</span>
+                                </div>
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    </div>
-                  </motion.div>
-                ))}
+                      </motion.div>
+                      
+                      {/* Native ad card - blends with leaderboard entries */}
+                      {showAdAfter && (
+                        <NativeAdCard 
+                          slot={`leaderboard-native-${index}`}
+                        />
+                      )}
+                    </React.Fragment>
+                  );
+                })}
               </div>
             )}
           </div>

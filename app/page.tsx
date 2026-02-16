@@ -15,6 +15,7 @@ import AuthModal from '@/components/AuthModal';
 import UserMenu from '@/components/UserMenu';
 import ShareModal from '@/components/ShareModal';
 import PaymentModal from '@/components/PaymentModal';
+import AdBanner from '@/components/AdBanner';
 import { useAppStore } from '@/lib/store';
 import { useAuth } from '@/lib/useAuth';
 import { authFetch } from '@/lib/apiClient';
@@ -995,6 +996,17 @@ export default function Home() {
             <div className="bg-zinc-900/50 rounded-2xl border border-zinc-800 p-4 min-h-[400px] max-h-[500px] overflow-y-auto">
               <FlawsList features={analysisResult.features} />
             </div>
+
+            {/* Ad Banner - Only shown to non-premium users */}
+            {!isPremium && (
+              <div className="mt-3">
+                <AdBanner 
+                  format="banner" 
+                  slot="results-panel-banner"
+                  className="rounded-xl overflow-hidden"
+                />
+              </div>
+            )}
 
             {/* Mobile Potential Score Card - Only on mobile for logged-in users */}
             {isAuthenticated && (
