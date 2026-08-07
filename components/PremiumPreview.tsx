@@ -406,10 +406,10 @@ const FASHION_SECTIONS = [
     label: 'Fit construction',
     blurb: 'Full-body + wardrobe uploads → silhouette matched to facial width.',
     items: [
-      { name: 'Structured navy blazer', why: 'Sharpens shoulder line vs facial width (FWHR support)', tag: '$128', price: true },
-      { name: 'Soft-shoulder knit polo', why: 'Clean collar frames jaw without adding bulk at neck', tag: '$54', price: true },
-      { name: 'Straight dark denim', why: 'Lengthens torso; keeps visual weight off lower face', tag: '$78', price: true },
-      { name: 'Trouser break: slight', why: 'Elongates leg line so face stays the focal point', tag: 'Fit', price: false },
+      { name: 'Structured navy blazer', why: 'Sharpens shoulder line vs facial width (FWHR support)', tag: '$128' },
+      { name: 'Soft-shoulder knit polo', why: 'Clean collar frames jaw without adding bulk at neck', tag: '$54' },
+      { name: 'Straight dark denim', why: 'Lengthens torso; keeps visual weight off lower face', tag: '$78' },
+      { name: 'Trouser break: slight', why: 'Elongates leg line so face stays the focal point', tag: 'Fit' },
     ],
   },
   {
@@ -729,7 +729,9 @@ export default function PremiumPreview({ onUserEngage }: PremiumPreviewProps) {
                         <p className="text-xs sm:text-sm font-medium text-white">{item.name}</p>
                         <span
                           className={`text-[11px] shrink-0 ${
-                            item.price ? 'text-[#22c55e] tabular-nums' : 'text-white/35 uppercase tracking-wider text-[9px] pt-0.5'
+                            item.tag.startsWith('$')
+                              ? 'text-[#22c55e] tabular-nums'
+                              : 'text-white/35 uppercase tracking-wider text-[9px] pt-0.5'
                           }`}
                         >
                           {item.tag}
