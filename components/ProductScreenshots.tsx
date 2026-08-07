@@ -260,14 +260,14 @@ export default function ProductScreenshots() {
             i % 2 === 1 ? 'lg:[&>*:first-child]:order-2' : ''
           }`}
         >
-          <div>
+          <div className="text-center lg:text-left">
             <p className="text-[11px] uppercase tracking-[0.2em] text-[#22c55e] font-semibold mb-3">
               Inside the platform
             </p>
             <h3 className="text-2xl sm:text-3xl font-bold text-white tracking-tight mb-3">
               {shot.label}
             </h3>
-            <p className="text-sm sm:text-base text-white/50 leading-relaxed max-w-md">
+            <p className="text-sm sm:text-base text-white/50 leading-relaxed max-w-md mx-auto lg:mx-0">
               {shot.caption}
             </p>
           </div>

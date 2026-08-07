@@ -110,7 +110,7 @@ export default function MarketingLanding({ onStartScan, onStartTrial }: Marketin
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: '-60px' }}
             transition={{ duration: 0.45 }}
-            className="max-w-xl mb-12"
+            className="max-w-xl mb-12 mx-auto text-center sm:mx-0 sm:text-left"
           >
             <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white mb-3">
               Everything that moves the score
@@ -129,6 +129,7 @@ export default function MarketingLanding({ onStartScan, onStartTrial }: Marketin
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: '-40px' }}
                 transition={{ duration: 0.4, delay: i * 0.04 }}
+                className="text-center sm:text-left"
               >
                 <p className="text-[#22c55e] text-[11px] font-semibold tabular-nums mb-2">
                   {String(i + 1).padStart(2, '0')}
@@ -191,26 +192,27 @@ export default function MarketingLanding({ onStartScan, onStartTrial }: Marketin
               initial={{ opacity: 0, y: 16 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
+              className="text-center lg:text-left"
             >
               <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white mb-3">
                 See the after. Then earn it.
               </h2>
-              <p className="text-sm sm:text-base text-white/50 leading-relaxed mb-8">
+              <p className="text-sm sm:text-base text-white/50 leading-relaxed mb-8 mx-auto lg:mx-0 max-w-md">
                 Free scan shows where you stand. Premium unlocks AI future-self, fashion, physique,
                 and the full protocol. {SUBSCRIPTION_PRICING.trialDays}-day trial on yearly.
               </p>
-              <div className="flex flex-col sm:flex-row gap-3">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center lg:justify-start gap-3">
                 <button
                   type="button"
                   onClick={onStartScan}
-                  className="px-7 py-3.5 bg-[#22c55e] hover:bg-white text-black text-sm font-bold rounded-xl transition-colors"
+                  className="w-full sm:w-auto px-7 py-3.5 bg-[#22c55e] hover:bg-white text-black text-sm font-bold rounded-xl transition-colors"
                 >
                   Get your free rating
                 </button>
                 <button
                   type="button"
                   onClick={onStartTrial}
-                  className="px-7 py-3.5 border border-white/25 hover:border-white/50 text-white text-sm font-semibold rounded-xl transition-colors"
+                  className="w-full sm:w-auto px-7 py-3.5 border border-white/25 hover:border-white/50 text-white text-sm font-semibold rounded-xl transition-colors"
                 >
                   Unlock Premium trial
                 </button>

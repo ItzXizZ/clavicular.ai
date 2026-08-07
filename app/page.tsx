@@ -553,9 +553,9 @@ export default function Home() {
             initial={{ opacity: 0, y: -50 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -50 }}
-            className="fixed top-20 left-1/2 -translate-x-1/2 z-50"
+            className="fixed top-20 left-1/2 -translate-x-1/2 z-50 w-[calc(100%-2rem)] max-w-sm px-0"
           >
-            <div className="bg-gradient-to-r from-[#22c55e] to-emerald-500 text-white px-6 py-3 rounded-xl shadow-lg shadow-green-500/30 flex items-center gap-3">
+            <div className="bg-gradient-to-r from-[#22c55e] to-emerald-500 text-white px-4 sm:px-6 py-3 rounded-xl shadow-lg shadow-green-500/30 flex items-center gap-3">
               <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
               </svg>
@@ -629,7 +629,7 @@ export default function Home() {
         initial={{ opacity: 0, x: -20 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ delay: 0.2 }}
-        className="w-full lg:flex-1 lg:max-w-sm xl:max-w-md shrink-0"
+        className="w-full max-w-md mx-auto lg:mx-0 lg:flex-1 lg:max-w-sm xl:max-w-md shrink-0 text-center lg:text-left"
       >
         <h1 className={`font-bold text-white mb-1 ${viewMode === 'results' ? 'text-xl lg:text-3xl' : 'text-2xl lg:text-4xl mb-2'}`}>
           {viewMode === 'results' ? (
@@ -754,9 +754,9 @@ export default function Home() {
                             Start 7-day free trial
                           </button>
                           <p className="text-center text-[11px] text-white/45 leading-relaxed">
-                            Yearly includes trial · then $399/yr
+                            Yearly includes trial · then $199/yr
                             <span className="text-white/25"> · </span>
-                            or $50/mo
+                            or $24.99/mo
                           </p>
                           <p className="text-center text-[10px] text-white/30">
                             AI future-self · Style & makeup · Fitness · Beauty Bot · cancel anytime

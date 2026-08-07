@@ -14,8 +14,19 @@ export interface SubscriptionFields {
 }
 
 export const SUBSCRIPTION_PRICING = {
-  monthly: { price: 50, label: '$50/mo', planEnv: 'NEXT_PUBLIC_PAYPAL_PLAN_MONTHLY', hasTrial: false },
-  yearly: { price: 399, label: '$399/yr', planEnv: 'NEXT_PUBLIC_PAYPAL_PLAN_YEARLY', hasTrial: true },
+  monthly: {
+    price: 24.99,
+    label: '$24.99/mo',
+    planEnv: 'NEXT_PUBLIC_PAYPAL_PLAN_MONTHLY',
+    hasTrial: false,
+  },
+  yearly: {
+    price: 199,
+    label: '$199/yr',
+    perMonthLabel: '~$16.58/mo',
+    planEnv: 'NEXT_PUBLIC_PAYPAL_PLAN_YEARLY',
+    hasTrial: true,
+  },
   trialDays: 7,
 } as const;
 

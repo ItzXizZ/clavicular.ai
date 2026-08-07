@@ -202,7 +202,7 @@ export default function ProtocolPlatform({
         transition={{ duration: 0.2 }}
         className="grid lg:grid-cols-[220px_1fr] gap-10"
       >
-        <aside className="space-y-5">
+        <aside className="space-y-5 text-center lg:text-left max-w-sm mx-auto lg:mx-0 lg:max-w-none">
           <div>
             <p className="text-[11px] uppercase tracking-[0.18em] text-white/35 mb-1">Overall</p>
             <p className="text-3xl font-semibold tabular-nums">
@@ -241,10 +241,10 @@ export default function ProtocolPlatform({
         </aside>
 
         <section>
-          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-8">
+          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-8 text-center sm:text-left items-center sm:items-end">
             <div>
               <h2 className="text-2xl font-semibold tracking-tight">{title}</h2>
-              <p className="text-sm text-white/45 mt-1 max-w-xl leading-relaxed">{subtitle}</p>
+              <p className="text-sm text-white/45 mt-1 max-w-xl leading-relaxed mx-auto sm:mx-0">{subtitle}</p>
               {protocols.length > 0 && (
                 <p className="text-[11px] text-white/30 mt-2">
                   Saved to your account. Only changes if you regenerate.
@@ -254,7 +254,7 @@ export default function ProtocolPlatform({
             <button
               onClick={() => handleRefresh(type)}
               disabled={loading}
-              className="self-start sm:self-auto px-4 py-2 text-sm font-medium border border-white/20 text-white hover:border-[#22c55e] hover:text-[#22c55e] disabled:opacity-40 transition-colors"
+              className="self-center sm:self-auto px-4 py-2 text-sm font-medium border border-white/20 text-white hover:border-[#22c55e] hover:text-[#22c55e] disabled:opacity-40 transition-colors"
             >
               {loading
                 ? 'Writing…'
@@ -312,7 +312,7 @@ export default function ProtocolPlatform({
             <div className="w-16" aria-hidden />
           </div>
 
-          <nav className="max-w-6xl mx-auto px-4 sm:px-6 flex gap-1 overflow-x-auto">
+          <nav className="max-w-6xl mx-auto px-4 sm:px-6 flex gap-1 overflow-x-auto justify-center lg:justify-start">
             {SECTIONS.map((s) => (
               <button
                 key={s.id}
@@ -379,10 +379,10 @@ export default function ProtocolPlatform({
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -8 }}
                   transition={{ duration: 0.2 }}
-                  className="max-w-2xl"
+                  className="max-w-2xl mx-auto text-center sm:text-left"
                 >
                   <h2 className="text-2xl font-semibold tracking-tight mb-2">Advisor</h2>
-                  <p className="text-sm text-white/45 mb-6 leading-relaxed">
+                  <p className="text-sm text-white/45 mb-6 leading-relaxed mx-auto sm:mx-0">
                     Ask follow-ups about Softmax routines, Hardmax options, products, or request a
                     new after photo. Keep questions specific for better answers.
                   </p>

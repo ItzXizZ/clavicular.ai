@@ -253,10 +253,10 @@ export default function PaymentModal({ isOpen, onClose, onSuccess }: PaymentModa
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-            className="fixed inset-0 flex items-center justify-center z-50 p-3 sm:p-4"
+            className="fixed inset-0 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="relative bg-black border border-white/15 rounded-2xl w-full max-w-5xl overflow-hidden shadow-2xl max-h-[92vh] flex flex-col">
+            <div className="relative bg-black border border-white/15 rounded-t-2xl sm:rounded-2xl w-full max-w-5xl overflow-hidden shadow-2xl max-h-[94vh] sm:max-h-[92vh] flex flex-col">
               <button
                 onClick={onClose}
                 className="absolute top-3 right-3 z-20 text-white/40 hover:text-white transition-colors p-1"
@@ -315,7 +315,7 @@ export default function PaymentModal({ isOpen, onClose, onSuccess }: PaymentModa
                             : 'text-white/40 hover:text-white'
                         }`}
                       >
-                        <div>$50/mo</div>
+                        <div>{SUBSCRIPTION_PRICING.monthly.label}</div>
                         <div className="text-[10px] font-normal opacity-80">Monthly</div>
                       </button>
                       <button
@@ -330,14 +330,16 @@ export default function PaymentModal({ isOpen, onClose, onSuccess }: PaymentModa
                         <span className="absolute -top-2 right-1 text-[9px] bg-black border border-[#22c55e] text-[#22c55e] px-1.5 py-0.5 rounded-full font-bold">
                           7-DAY FREE
                         </span>
-                        <div>$399/yr</div>
-                        <div className="text-[10px] font-normal opacity-80">~$33/mo</div>
+                        <div>{SUBSCRIPTION_PRICING.yearly.label}</div>
+                        <div className="text-[10px] font-normal opacity-80">
+                          {SUBSCRIPTION_PRICING.yearly.perMonthLabel}
+                        </div>
                       </button>
                     </div>
                     <p className="text-center text-xs text-[#22c55e] mt-3">
                       {plan === 'yearly'
-                        ? '7 days free, then $399/year · Cancel anytime'
-                        : '$50/month billed immediately · Cancel anytime'}
+                        ? `${SUBSCRIPTION_PRICING.trialDays} days free, then $199/year · Cancel anytime`
+                        : '$24.99/month billed immediately · Cancel anytime'}
                     </p>
                     <p className="text-center text-[11px] text-white/35 mt-2 leading-relaxed">
                       Total transformation: stylist, derm, makeup, and trainer energy
@@ -404,7 +406,7 @@ export default function PaymentModal({ isOpen, onClose, onSuccess }: PaymentModa
                 </div>
 
                 {/* Protocol tabs preview: right on desktop, below on mobile */}
-                <div className="flex flex-col min-h-[420px] lg:min-h-0 p-3 bg-black lg:max-h-[92vh]">
+                <div className="flex flex-col min-h-[300px] sm:min-h-[380px] lg:min-h-0 p-3 bg-black lg:max-h-[92vh]">
                   <PremiumPreview onUserEngage={() => setPreviewEngaged(true)} />
                 </div>
               </div>

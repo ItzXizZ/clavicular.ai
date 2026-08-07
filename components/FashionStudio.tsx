@@ -233,16 +233,16 @@ export default function FashionStudio({
   return (
     <div className="grid lg:grid-cols-[1fr_300px] gap-10">
       <section className="space-y-8">
-        <div>
+        <div className="text-center lg:text-left">
           <h2 className="text-2xl font-semibold tracking-tight">Fashion</h2>
-          <p className="text-sm text-white/45 mt-2 leading-relaxed max-w-xl">
+          <p className="text-sm text-white/45 mt-2 leading-relaxed max-w-xl mx-auto lg:mx-0">
             Upload a full-body photo first. We use it for fit combinations, then recommend pieces
             that match your skin tone and whatever is already in your wardrobe.
           </p>
         </div>
 
-        <div>
-          <div className="flex items-center justify-between mb-3">
+        <div className="flex flex-col items-center lg:items-start">
+          <div className="flex items-center justify-between mb-3 w-full max-w-xs">
             <p className="text-[11px] uppercase tracking-[0.18em] text-white/35">Full body</p>
             <button
               type="button"
@@ -332,12 +332,12 @@ export default function FashionStudio({
           )}
         </div>
 
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-col sm:flex-row flex-wrap gap-3 items-stretch sm:items-center justify-center lg:justify-start">
           <button
             type="button"
             onClick={getAdvice}
             disabled={loadingAdvice || (!fullBodyImage && !faceImage)}
-            className="px-4 py-2 text-sm font-medium border border-white/20 text-white hover:border-[#22c55e] hover:text-[#22c55e] disabled:opacity-35 transition-colors"
+            className="w-full sm:w-auto px-4 py-2 text-sm font-medium border border-white/20 text-white hover:border-[#22c55e] hover:text-[#22c55e] disabled:opacity-35 transition-colors"
           >
             {loadingAdvice ? 'Matching skin tone…' : 'Get style recommendations'}
           </button>
@@ -345,7 +345,7 @@ export default function FashionStudio({
             type="button"
             onClick={constructFits}
             disabled={!fullBodyImage || loadingFit}
-            className="px-4 py-2 text-sm font-medium bg-[#22c55e] text-black hover:bg-white disabled:opacity-35 transition-colors"
+            className="w-full sm:w-auto px-4 py-2 text-sm font-medium bg-[#22c55e] text-black hover:bg-white disabled:opacity-35 transition-colors"
           >
             {loadingFit ? 'Generating fits…' : 'Generate fit combinations'}
           </button>

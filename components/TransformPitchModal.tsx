@@ -1,6 +1,7 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
+import { SUBSCRIPTION_PRICING } from '@/lib/subscription';
 
 interface TransformPitchModalProps {
   isOpen: boolean;
@@ -91,7 +92,8 @@ export default function TransformPitchModal({
                 Start 7-day free trial
               </button>
               <p className="text-center text-[11px] text-white/40">
-                Yearly includes trial · then $399/yr · or $50/mo
+                Yearly includes trial · then {SUBSCRIPTION_PRICING.yearly.label} · or{' '}
+                {SUBSCRIPTION_PRICING.monthly.label}
               </p>
             </div>
           </motion.div>

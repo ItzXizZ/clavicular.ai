@@ -494,14 +494,14 @@ export default function PremiumPreview({ onUserEngage }: PremiumPreviewProps) {
 
   return (
     <div className="h-full flex flex-col min-h-0 rounded-2xl border border-white/15 bg-[#0c0c0f] overflow-hidden">
-      <div className="border-b border-white/10 px-4 py-3 flex items-center justify-between gap-3 shrink-0">
+      <div className="border-b border-white/10 px-4 py-3 flex flex-col items-center text-center sm:flex-row sm:items-center sm:justify-between sm:text-left gap-1 sm:gap-3 shrink-0">
         <p className="text-sm font-semibold tracking-tight text-white">
           Clavicular <span className="text-[#22c55e]">Protocol</span>
         </p>
         <span className="text-[10px] text-white/30 uppercase tracking-wider">What you unlock</span>
       </div>
 
-      <nav className="flex gap-0.5 px-2 sm:px-3 border-b border-white/10 overflow-x-auto shrink-0">
+      <nav className="flex gap-0.5 px-2 sm:px-3 border-b border-white/10 overflow-x-auto shrink-0 justify-start sm:justify-center lg:justify-start">
         {TABS.map((t) => (
           <button
             key={t.id}
@@ -534,7 +534,7 @@ export default function PremiumPreview({ onUserEngage }: PremiumPreviewProps) {
               className="space-y-4"
             >
               <div className="grid sm:grid-cols-[120px_1fr] gap-4">
-                <aside className="space-y-3">
+                <aside className="space-y-3 text-center sm:text-left">
                   <div>
                     <p className="text-[9px] uppercase tracking-[0.18em] text-white/35 mb-1">Overall</p>
                     <p className="text-2xl font-semibold tabular-nums">
@@ -543,7 +543,7 @@ export default function PremiumPreview({ onUserEngage }: PremiumPreviewProps) {
                     </p>
                     <p className="text-[11px] text-white/40 mt-0.5">Feature-by-feature plan</p>
                   </div>
-                  <div className="relative aspect-[16/10] overflow-hidden border border-white/10">
+                  <div className="relative aspect-[16/10] overflow-hidden border border-white/10 mx-auto sm:mx-0 max-w-sm">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src="/transformation.png"
@@ -556,7 +556,7 @@ export default function PremiumPreview({ onUserEngage }: PremiumPreviewProps) {
                     </div>
                   </div>
                 </aside>
-                <div>
+                <div className="text-center sm:text-left">
                   <h3 className="text-sm font-semibold tracking-tight mb-1">
                     {tab === 'softmax' ? 'Softmax by feature' : 'Hardmax by feature'}
                   </h3>
@@ -565,7 +565,7 @@ export default function PremiumPreview({ onUserEngage }: PremiumPreviewProps) {
                       ? 'Non-invasive protocols for every facial region, ranked by score impact with product paths.'
                       : 'Surgical and Semimax paths per region. Research links and consult framing, never pressure.'}
                   </p>
-                  <div className="flex flex-wrap gap-1.5 mb-3">
+                  <div className="flex flex-wrap gap-1.5 mb-3 justify-center sm:justify-start">
                     {categories.map((c) => (
                       <button
                         key={c.id}
@@ -620,14 +620,14 @@ export default function PremiumPreview({ onUserEngage }: PremiumPreviewProps) {
               transition={{ duration: 0.2 }}
               className="space-y-4"
             >
-              <div>
+              <div className="text-center sm:text-left">
                 <h3 className="text-sm font-semibold tracking-tight">Physique for face score</h3>
                 <p className="text-[11px] text-white/40 mt-1 leading-relaxed">
                   Leanmaxxing and training that frame the face. Goal physiques included.
                 </p>
               </div>
 
-              <div className="relative aspect-[3/4] max-h-[280px] w-full overflow-hidden border border-[#22c55e]/35">
+              <div className="relative aspect-[3/4] max-h-[280px] w-full max-w-xs mx-auto sm:max-w-none sm:mx-0 overflow-hidden border border-[#22c55e]/35">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src="/marketing/physique-clavicular.webp"
@@ -686,14 +686,14 @@ export default function PremiumPreview({ onUserEngage }: PremiumPreviewProps) {
               transition={{ duration: 0.2 }}
               className="space-y-4"
             >
-              <div>
+              <div className="text-center sm:text-left">
                 <h3 className="text-sm font-semibold tracking-tight">Fashion system</h3>
                 <p className="text-[11px] text-white/40 mt-1 leading-relaxed">
                   Color analysis, fit construction, wardrobe uploads, and grooming treated as one score-aware system.
                 </p>
               </div>
 
-              <div className="relative aspect-[16/10] sm:aspect-square max-h-[220px] overflow-hidden border border-white/10">
+              <div className="relative aspect-[16/10] sm:aspect-square max-h-[220px] overflow-hidden border border-white/10 mx-auto sm:mx-0 max-w-sm">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src="/marketing/fashion-fits.png"
@@ -702,7 +702,7 @@ export default function PremiumPreview({ onUserEngage }: PremiumPreviewProps) {
                 />
               </div>
 
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap gap-1.5 justify-center sm:justify-start">
                 {FASHION_SECTIONS.map((s) => (
                   <button
                     key={s.id}

@@ -135,10 +135,10 @@ export default function PhysiqueStudio({
 
   return (
     <div className="grid lg:grid-cols-[200px_1fr] gap-10">
-      <aside className="space-y-4">
+      <aside className="space-y-4 flex flex-col items-center text-center lg:items-start lg:text-left">
         <div>
           <h2 className="text-2xl font-semibold tracking-tight">Physique</h2>
-          <p className="text-sm text-white/45 mt-2 leading-relaxed">
+          <p className="text-sm text-white/45 mt-2 leading-relaxed max-w-md mx-auto lg:mx-0">
             Upload a torso or full-body photo. Guidance covers training, creatine, shoulders/arms,
             and how your frame supports your face score.
           </p>
