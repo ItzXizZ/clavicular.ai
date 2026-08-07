@@ -22,6 +22,9 @@ interface AppState {
   analysisResult: AnalysisResult | null;
   capturedImage: string | null;
   
+  // AI after-image (persisted so a page refresh doesn't trigger a costly re-generation)
+  afterImageUrl: string | null;
+  
   // Feature highlighting
   selectedFeatureId: string | null;
   
@@ -37,6 +40,7 @@ interface AppState {
   setIsAnalyzing: (analyzing: boolean) => void;
   setAnalysisResult: (result: AnalysisResult | null) => void;
   setCapturedImage: (image: string | null) => void;
+  setAfterImageUrl: (url: string | null) => void;
   setSelectedFeatureId: (id: string | null) => void;
   setProtocols: (protocols: ProtocolRecommendation[]) => void;
   reset: () => void;
@@ -51,6 +55,7 @@ const initialState = {
   isAnalyzing: false,
   analysisResult: null,
   capturedImage: null,
+  afterImageUrl: null,
   selectedFeatureId: null,
   protocols: [],
 };
@@ -68,6 +73,7 @@ export const useAppStore = create<AppState>()(
       setIsAnalyzing: (analyzing) => set({ isAnalyzing: analyzing }),
       setAnalysisResult: (result) => set({ analysisResult: result }),
       setCapturedImage: (image) => set({ capturedImage: image }),
+      setAfterImageUrl: (url) => set({ afterImageUrl: url }),
       setSelectedFeatureId: (id) => set({ selectedFeatureId: id }),
       setProtocols: (protocols) => set({ protocols: protocols }),
       reset: () => set(initialState),
@@ -79,6 +85,7 @@ export const useAppStore = create<AppState>()(
         viewMode: state.viewMode,
         analysisResult: state.analysisResult,
         capturedImage: state.capturedImage,
+        afterImageUrl: state.afterImageUrl,
         protocols: state.protocols,
         resultsView: state.resultsView,
       }),

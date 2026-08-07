@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { uploadLeaderboardImage } from '@/lib/supabase';
 import { verifyAuth } from '@/lib/authMiddleware';
+import { hasActiveSubscription } from '@/lib/subscription';
 
 // Generate a cuid-like ID
 function generateId(): string {
@@ -25,17 +26,41 @@ export async function GET(request: NextRequest) {
   try {
     // Use raw query since Prisma client may not be regenerated yet
     // Filter out hidden entries from public leaderboard
-    const entries = await prisma.$queryRaw`
+    const entries = await prisma.$queryRaw<Array<{
+      id: string;
+      name: string;
+      age: number;
+      imageUrl: string;
+      overallScore: number;
+      harmScore: number;
+      miscScore: number;
+      anguScore: number;
+      dimoScore: number;
+      rarity: string;
+      features: string;
+      createdAt: Date;
+      accessTier: string | null;
+      subscriptionStatus: string | null;
+      trialEndsAt: Date | null;
+      currentPeriodEnd: Date | null;
+    }>>`
       SELECT 
-        "id", "name", "age", "imageUrl", "overallScore", 
-        "harmScore", "miscScore", "anguScore", "dimoScore",
-        "rarity", "features", "createdAt"
-      FROM "LeaderboardEntry"
-      WHERE "hidden" = false
-      ORDER BY "overallScore" DESC
+        le."id", le."name", le."age", le."imageUrl", le."overallScore", 
+        le."harmScore", le."miscScore", le."anguScore", le."dimoScore",
+        le."rarity", le."features", le."createdAt",
+        u."accessTier", u."subscriptionStatus", u."trialEndsAt", u."currentPeriodEnd"
+      FROM "LeaderboardEntry" le
+      LEFT JOIN "User" u ON u."id" = le."userId"
+      WHERE le."hidden" = false
+      ORDER BY le."overallScore" DESC
     `;
 
-    return NextResponse.json({ entries });
+    const withPremium = entries.map(({ accessTier, subscriptionStatus, trialEndsAt, currentPeriodEnd, ...entry }) => ({
+      ...entry,
+      isPremium: hasActiveSubscription({ accessTier, subscriptionStatus, trialEndsAt, currentPeriodEnd }),
+    }));
+
+    return NextResponse.json({ entries: withPremium });
   } catch (error) {
     console.error('Error fetching leaderboard:', error);
     return NextResponse.json(

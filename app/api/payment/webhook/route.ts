@@ -1,31 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-
-// PayPal Webhook Handler
-// This endpoint is called by PayPal when a payment is completed
-// You need to add this URL to your PayPal webhook settings:
-// https://your-domain.com/api/payment/webhook
+import { resolvePlanFromId } from '@/lib/paypal';
+import {
+  subscriptionActivationData,
+  downgradeSubscriptionData,
+} from '@/lib/subscription';
 
 interface PayPalWebhookEvent {
   id: string;
   event_type: string;
   resource: {
     id: string;
-    status: string;
-    payer?: {
-      email_address?: string;
-      payer_id?: string;
+    status?: string;
+    plan_id?: string;
+    custom_id?: string;
+    billing_info?: {
+      next_billing_time?: string;
     };
-    purchase_units?: Array<{
-      custom_id?: string; // We'll store user ID here
-      amount?: {
-        value: string;
-        currency_code: string;
-      };
-    }>;
     subscriber?: {
       email_address?: string;
     };
+    payer?: {
+      email_address?: string;
+    };
+    // PAYMENT.SALE.COMPLETED
+    billing_agreement_id?: string;
   };
   create_time: string;
 }
@@ -33,21 +32,41 @@ interface PayPalWebhookEvent {
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     const body: PayPalWebhookEvent = await request.json();
-    
+
     console.log('[PayPal Webhook] Received event:', body.event_type, body.id);
 
-    // Handle different event types
     switch (body.event_type) {
+      case 'BILLING.SUBSCRIPTION.ACTIVATED':
+      case 'BILLING.SUBSCRIPTION.UPDATED':
+        await handleSubscriptionActivated(body);
+        break;
+
+      case 'BILLING.SUBSCRIPTION.CANCELLED':
+        await handleSubscriptionCancelled(body);
+        break;
+
+      case 'BILLING.SUBSCRIPTION.SUSPENDED':
+        await handleSubscriptionSuspended(body);
+        break;
+
+      case 'BILLING.SUBSCRIPTION.EXPIRED':
+        await handleSubscriptionExpired(body);
+        break;
+
+      case 'PAYMENT.SALE.COMPLETED':
+        await handleSaleCompleted(body);
+        break;
+
+      // Legacy one-time events (keep for old purchases)
       case 'PAYMENT.CAPTURE.COMPLETED':
       case 'CHECKOUT.ORDER.APPROVED':
-        await handlePaymentCompleted(body);
+        await handleLegacyPayment(body);
         break;
-      
-      case 'PAYMENT.CAPTURE.DENIED':
+
       case 'PAYMENT.CAPTURE.REFUNDED':
-        await handlePaymentFailed(body);
+        await handleRefund(body);
         break;
-      
+
       default:
         console.log('[PayPal Webhook] Unhandled event type:', body.event_type);
     }
@@ -62,64 +81,184 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 }
 
-async function handlePaymentCompleted(event: PayPalWebhookEvent) {
-  const payerEmail = event.resource.payer?.email_address || 
-                     event.resource.subscriber?.email_address;
-  const customId = event.resource.purchase_units?.[0]?.custom_id;
-  
-  console.log('[PayPal Webhook] Payment completed for:', payerEmail, 'customId:', customId);
-
-  // Try to find user by custom_id (user ID) first, then by email
-  let user = null;
-  
+async function findUser(customId?: string, email?: string, subscriptionId?: string) {
   if (customId) {
-    user = await prisma.user.findUnique({
-      where: { id: customId }
-    });
+    const byId = await prisma.user.findUnique({ where: { id: customId } });
+    if (byId) return byId;
   }
-  
-  if (!user && payerEmail) {
-    user = await prisma.user.findUnique({
-      where: { email: payerEmail }
-    });
+  if (subscriptionId) {
+    const bySub = await prisma.user.findFirst({ where: { subscriptionId } });
+    if (bySub) return bySub;
+  }
+  if (email) {
+    return prisma.user.findUnique({ where: { email } });
+  }
+  return null;
+}
+
+async function handleSubscriptionActivated(event: PayPalWebhookEvent) {
+  const subscriptionId = event.resource.id;
+  const customId = event.resource.custom_id;
+  const email = event.resource.subscriber?.email_address;
+  const plan = resolvePlanFromId(event.resource.plan_id);
+  const status = event.resource.status || 'ACTIVE';
+
+  const user = await findUser(customId, email, subscriptionId);
+  if (!user) {
+    console.warn('[PayPal Webhook] No user for subscription:', subscriptionId, email, customId);
+    return;
   }
 
-  if (user) {
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { 
-        accessTier: 'PREMIUM',
-        updatedAt: new Date()
-      }
-    });
-    console.log('[PayPal Webhook] User upgraded to PREMIUM:', user.id);
+  const activation = subscriptionActivationData(plan, status);
+  const nextBilling = event.resource.billing_info?.next_billing_time;
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      subscriptionId,
+      ...activation,
+      currentPeriodEnd: nextBilling
+        ? new Date(nextBilling)
+        : activation.currentPeriodEnd,
+      updatedAt: new Date(),
+    },
+  });
+
+  console.log('[PayPal Webhook] Subscription activated for', user.id);
+}
+
+async function handleSubscriptionCancelled(event: PayPalWebhookEvent) {
+  const subscriptionId = event.resource.id;
+  const user = await findUser(
+    event.resource.custom_id,
+    event.resource.subscriber?.email_address,
+    subscriptionId
+  );
+  if (!user) return;
+
+  // Keep access until period end
+  const periodEnd =
+    user.currentPeriodEnd ||
+    (event.resource.billing_info?.next_billing_time
+      ? new Date(event.resource.billing_info.next_billing_time)
+      : new Date());
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      subscriptionStatus: 'CANCELLED',
+      currentPeriodEnd: periodEnd,
+      // Downgrade immediately only if period already ended
+      ...(periodEnd <= new Date()
+        ? downgradeSubscriptionData()
+        : {}),
+      updatedAt: new Date(),
+    },
+  });
+
+  console.log('[PayPal Webhook] Subscription cancelled for', user.id);
+}
+
+async function handleSubscriptionSuspended(event: PayPalWebhookEvent) {
+  const user = await findUser(
+    event.resource.custom_id,
+    event.resource.subscriber?.email_address,
+    event.resource.id
+  );
+  if (!user) return;
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      subscriptionStatus: 'SUSPENDED',
+      accessTier: 'REGISTERED',
+      updatedAt: new Date(),
+    },
+  });
+}
+
+async function handleSubscriptionExpired(event: PayPalWebhookEvent) {
+  const user = await findUser(
+    event.resource.custom_id,
+    event.resource.subscriber?.email_address,
+    event.resource.id
+  );
+  if (!user) return;
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      ...downgradeSubscriptionData(),
+      updatedAt: new Date(),
+    },
+  });
+}
+
+async function handleSaleCompleted(event: PayPalWebhookEvent) {
+  // Renewal payment — extend period
+  const subscriptionId = event.resource.billing_agreement_id || event.resource.id;
+  const user = await findUser(undefined, event.resource.subscriber?.email_address, subscriptionId);
+  if (!user) return;
+
+  const plan = (user.subscriptionPlan === 'yearly' ? 'yearly' : 'monthly') as
+    | 'monthly'
+    | 'yearly';
+  const currentPeriodEnd = new Date();
+  if (plan === 'yearly') {
+    currentPeriodEnd.setFullYear(currentPeriodEnd.getFullYear() + 1);
   } else {
-    console.warn('[PayPal Webhook] Could not find user for payment:', payerEmail, customId);
-    // Store the payment for later matching
-    // You might want to create a PendingPayment table for this
+    currentPeriodEnd.setMonth(currentPeriodEnd.getMonth() + 1);
   }
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      accessTier: 'PREMIUM',
+      subscriptionStatus: 'ACTIVE',
+      currentPeriodEnd,
+      updatedAt: new Date(),
+    },
+  });
+
+  console.log('[PayPal Webhook] Renewal processed for', user.id);
 }
 
-async function handlePaymentFailed(event: PayPalWebhookEvent) {
-  const payerEmail = event.resource.payer?.email_address;
-  console.log('[PayPal Webhook] Payment failed/refunded for:', payerEmail);
-  
-  // Optionally revoke premium access on refund
-  if (payerEmail) {
-    const user = await prisma.user.findUnique({
-      where: { email: payerEmail }
-    });
-    
-    if (user && event.event_type === 'PAYMENT.CAPTURE.REFUNDED') {
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { 
-          accessTier: 'REGISTERED',
-          updatedAt: new Date()
-        }
-      });
-      console.log('[PayPal Webhook] User downgraded due to refund:', user.id);
-    }
-  }
+async function handleLegacyPayment(event: PayPalWebhookEvent) {
+  const email =
+    event.resource.payer?.email_address ||
+    event.resource.subscriber?.email_address;
+  const customId = event.resource.custom_id;
+  const user = await findUser(customId, email);
+  if (!user) return;
+
+  // Grandfather one-time buyers: grant monthly-equivalent period once
+  const periodEnd = new Date();
+  periodEnd.setMonth(periodEnd.getMonth() + 1);
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      accessTier: 'PREMIUM',
+      subscriptionStatus: 'ACTIVE',
+      subscriptionPlan: 'monthly',
+      currentPeriodEnd: periodEnd,
+      trialEndsAt: null,
+      updatedAt: new Date(),
+    },
+  });
 }
 
+async function handleRefund(event: PayPalWebhookEvent) {
+  const email = event.resource.payer?.email_address;
+  if (!email) return;
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (!user) return;
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      ...downgradeSubscriptionData(),
+      updatedAt: new Date(),
+    },
+  });
+}

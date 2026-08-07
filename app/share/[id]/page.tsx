@@ -284,18 +284,18 @@ export default function SharePage() {
               </div>
 
               {/* CTA Button - Desktop only (inside the box) */}
-              <div className="hidden lg:block p-4">
+              <div className="hidden lg:block p-4 space-y-2">
                 <Link href="/">
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    className="w-full py-4 px-6 bg-gradient-to-r from-[#22c55e] to-[#16a34a] hover:from-[#16a34a] hover:to-[#15803d] text-white text-lg font-semibold rounded-2xl transition-all shadow-lg shadow-green-500/25"
+                    className="w-full py-4 px-6 bg-gradient-to-r from-[#22c55e] to-[#16a34a] hover:from-[#16a34a] hover:to-[#15803d] text-white text-sm font-bold uppercase tracking-wide rounded-2xl transition-all shadow-lg shadow-green-500/25"
                   >
-                    Get My Rating
+                    TO COMPLETELY TRANSFORM YOUR FACE
                   </motion.button>
                 </Link>
-                <p className="text-zinc-600 text-sm text-center mt-3">
-                  AI-powered facial analysis • Free to try
+                <p className="text-zinc-600 text-sm text-center">
+                  Free scan · fashion · physique · Softmax/Hardmax · AI before/after
                 </p>
               </div>
             </motion.div>
@@ -386,13 +386,13 @@ export default function SharePage() {
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    className="w-full py-4 px-6 bg-gradient-to-r from-[#22c55e] to-[#16a34a] hover:from-[#16a34a] hover:to-[#15803d] text-white text-lg font-semibold rounded-2xl transition-all shadow-lg shadow-green-500/25"
+                    className="w-full py-4 px-6 bg-gradient-to-r from-[#22c55e] to-[#16a34a] hover:from-[#16a34a] hover:to-[#15803d] text-white text-sm font-bold uppercase tracking-wide rounded-2xl transition-all shadow-lg shadow-green-500/25"
                   >
-                    Get My Rating
+                    TO COMPLETELY TRANSFORM YOUR FACE
                   </motion.button>
                 </Link>
                 <p className="text-zinc-600 text-sm text-center mt-4">
-                  AI-powered facial analysis • Free to try
+                  Free scan · fashion · physique · Softmax/Hardmax · AI before/after
                 </p>
               </div>
             </motion.div>

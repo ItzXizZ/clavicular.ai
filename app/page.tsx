@@ -1,13 +1,10 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import IPhoneMockup from '@/components/IPhoneMockup';
 import CameraCapture from '@/components/CameraCapture';
-import ToggleSwitch from '@/components/ToggleSwitch';
-import ScoreDisplay from '@/components/ScoreDisplay';
 import FlawsList from '@/components/FlawsList';
-import ProtocolRecommendation from '@/components/ProtocolRecommendation';
 import FaceVisualization from '@/components/FaceVisualization';
 import LeaderboardEntryModal from '@/components/LeaderboardEntryModal';
 import Leaderboard from '@/components/Leaderboard';
@@ -15,11 +12,16 @@ import AuthModal from '@/components/AuthModal';
 import UserMenu from '@/components/UserMenu';
 import ShareModal from '@/components/ShareModal';
 import PaymentModal from '@/components/PaymentModal';
-import AdBanner from '@/components/AdBanner';
+import BeforeAfterReveal from '@/components/BeforeAfterReveal';
+import BeautyBot from '@/components/BeautyBot';
+import ProtocolPlatform from '@/components/ProtocolPlatform';
+import MarketingLanding from '@/components/MarketingLanding';
 import { useAppStore } from '@/lib/store';
 import { useAuth } from '@/lib/useAuth';
 import { authFetch } from '@/lib/apiClient';
-import type { Landmark, ProtocolRecommendation as ProtocolRecommendationType } from '@/lib/types';
+import { isPremiumUser } from '@/lib/subscription';
+import { loadSavedAdvice, peekSavedAdvice, persistAdvice } from '@/lib/saveAdvice';
+import type { Landmark } from '@/lib/types';
 
 export default function Home() {
   const [analysisError, setAnalysisError] = useState<string | null>(null);
@@ -29,6 +31,8 @@ export default function Home() {
   const { isAuthenticated, isLoading: authLoading, dbUser, user, refreshDbUser } = useAuth();
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authFeature, setAuthFeature] = useState<'leaderboard' | 'protocol' | 'flaws'>('leaderboard');
+  const [referralCode, setReferralCode] = useState<string | null>(null);
+  const [showReferralWelcome, setShowReferralWelcome] = useState(false);
   
   // Leaderboard state
   const [showLeaderboard, setShowLeaderboard] = useState(false);
@@ -43,41 +47,64 @@ export default function Home() {
   
   // Premium/payment state
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [paymentFeature, setPaymentFeature] = useState<'flaws' | 'protocol' | 'premium'>('premium');
-  const isPremium = dbUser?.accessTier === 'PREMIUM' || dbUser?.accessTier === 'premium';
+  const isPremium = isPremiumUser(dbUser);
   
-  // AI Protocol state
-  const [aiProtocols, setAiProtocols] = useState<ProtocolRecommendationType[]>([]);
-  const [isLoadingAiProtocols, setIsLoadingAiProtocols] = useState(false);
-  const [aiProtocolError, setAiProtocolError] = useState<string | null>(null);
+  // AI before/after transform (afterImageUrl lives in the persisted store —
+  // see below — so a page refresh doesn't trigger a costly re-generation)
+  const [isGeneratingAfter, setIsGeneratingAfter] = useState(false);
+  const [showBeautyBot, setShowBeautyBot] = useState(false);
   
   const {
     viewMode,
     profileMode,
     resultsView,
-    protocolType,
     showProtocol,
     isAnalyzing,
     analysisResult,
     capturedImage,
+    afterImageUrl,
     protocols,
     setViewMode,
     setProfileMode,
     setResultsView,
-    setProtocolType,
     setShowProtocol,
     setIsAnalyzing,
     setAnalysisResult,
     setCapturedImage,
+    setAfterImageUrl,
     setSelectedFeatureId,
     setProtocols,
   } = useAppStore();
+
+  // Check for referral code in URL on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const refCode = urlParams.get('ref');
+      if (refCode) {
+        setReferralCode(refCode);
+        // If not authenticated, show signup modal with referral code
+        if (!isAuthenticated && !authLoading) {
+          setShowAuthModal(true);
+        }
+      }
+    }
+  }, [isAuthenticated, authLoading]);
 
   // Handle pending action after OAuth redirect and auto-join leaderboard for new users
   useEffect(() => {
     if (isAuthenticated && !authLoading && dbUser) {
       const pendingAction = sessionStorage.getItem('auth_pending_action');
       const hasProcessedNewUser = sessionStorage.getItem('processed_new_user');
+      const referralApplied = sessionStorage.getItem('referral_applied');
+      
+      // Show welcome message if referral was applied
+      if (referralApplied) {
+        sessionStorage.removeItem('referral_applied');
+        setShowReferralWelcome(true);
+        // Auto-hide after 5 seconds
+        setTimeout(() => setShowReferralWelcome(false), 5000);
+      }
       
       if (pendingAction) {
         sessionStorage.removeItem('auth_pending_action');
@@ -125,6 +152,7 @@ export default function Home() {
   const handleCapture = useCallback(async (imageData: string, landmarks: Landmark[]) => {
     setIsAnalyzing(true);
     setCapturedImage(imageData);
+    setAfterImageUrl(null); // New photo — any previous after-image no longer applies
     setAnalysisError(null);
     setFlashlightOn(false); // Turn off flashlight when capturing
     
@@ -173,7 +201,7 @@ export default function Home() {
     } finally {
       setIsAnalyzing(false);
     }
-  }, [profileMode, setAnalysisResult, setCapturedImage, setIsAnalyzing, setProtocols, setViewMode]);
+  }, [profileMode, setAnalysisResult, setCapturedImage, setAfterImageUrl, setIsAnalyzing, setProtocols, setViewMode]);
 
   const handleBackToCamera = () => {
     setViewMode('camera');
@@ -184,6 +212,8 @@ export default function Home() {
     setAnalysisError(null);
     setFlashlightOn(false);
     setLeaderboardSuccess(null);
+    setAfterImageUrl(null);
+    setShowBeautyBot(false);
   };
 
   // Handle gated actions - check auth first
@@ -196,6 +226,19 @@ export default function Home() {
     }
   };
 
+  const openTransformPaywall = () => {
+    if (!isAuthenticated) {
+      setAuthFeature('protocol');
+      setShowAuthModal(true);
+      return;
+    }
+    setShowPaymentModal(true);
+  };
+
+  const scrollToScan = () => {
+    document.getElementById('scan')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+
   // Handle viewing protocol (gated + premium check)
   const handleViewProtocol = () => {
     if (!isAuthenticated) {
@@ -205,48 +248,113 @@ export default function Home() {
     }
     
     if (!isPremium) {
-      setPaymentFeature('protocol');
       setShowPaymentModal(true);
       return;
     }
     
     setShowProtocol(true);
-    // Fetch AI protocols if premium
-    fetchAiProtocols();
   };
 
-  // Fetch AI-powered protocol recommendations
-  const fetchAiProtocols = async () => {
-    if (!analysisResult || !isPremium) return;
-    
-    setIsLoadingAiProtocols(true);
-    setAiProtocolError(null);
-    
+  // Generate AI after-image (premium only — this is a real, paid OpenAI call)
+  const [afterImageError, setAfterImageError] = useState<string | null>(null);
+  const autoGenAttemptRef = useRef<string | null>(null);
+  const afterHydratedRef = useRef(false);
+
+  const imageFingerprint = (img: string | null) =>
+    img ? `${img.length}:${img.slice(0, 64)}:${img.slice(-32)}` : null;
+
+  // Restore saved after-image before any auto-generation
+  useEffect(() => {
+    if (afterHydratedRef.current || afterImageUrl) return;
+    afterHydratedRef.current = true;
+
+    const local = peekSavedAdvice<{ url?: string; sourceImageKey?: string }>('after_image');
+    const key = imageFingerprint(capturedImage);
+    if (local?.url && (!local.sourceImageKey || local.sourceImageKey === key)) {
+      setAfterImageUrl(local.url);
+      return;
+    }
+
+    void (async () => {
+      const saved = await loadSavedAdvice<{ url?: string; sourceImageKey?: string }>('after_image');
+      const currentKey = imageFingerprint(capturedImage);
+      if (saved?.url && (!saved.sourceImageKey || saved.sourceImageKey === currentKey)) {
+        setAfterImageUrl(saved.url);
+      }
+    })();
+  }, [afterImageUrl, capturedImage, setAfterImageUrl]);
+
+  const generateAfterImage = useCallback(async (force = false) => {
+    if (!capturedImage || !analysisResult || !isAuthenticated || !isPremium) return;
+
+    if (!force && afterImageUrl) return;
+
+    setIsGeneratingAfter(true);
+    setAfterImageError(null);
     try {
-      const response = await authFetch('/api/ai-protocol', {
+      const fixes = protocols.slice(0, 6).map((p) => p.fix?.title || p.issue);
+      const flaws = analysisResult.features
+        .filter((f) => !f.isStrength)
+        .slice(0, 6)
+        .map((f) => f.name);
+      const response = await authFetch('/api/transform-image', {
         method: 'POST',
         body: JSON.stringify({
+          image: capturedImage,
           features: analysisResult.features,
-          overallScore: analysisResult.overallScore,
-          categoryScores: analysisResult.categoryScores,
-          protocolType,
+          fixes: fixes.length ? fixes : flaws,
+          source: 'protocol',
+          forceRegenerate: force,
         }),
       });
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Failed to fetch AI recommendations');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.afterImageUrl) {
+          setAfterImageUrl(data.afterImageUrl);
+          await persistAdvice('after_image', {
+            url: data.afterImageUrl,
+            sourceImageKey: imageFingerprint(capturedImage),
+            savedAt: new Date().toISOString(),
+          });
+        }
+      } else {
+        const data = await response.json().catch(() => ({}));
+        setAfterImageError(data.error || 'Failed to generate after photo');
       }
-      
-      const data = await response.json();
-      setAiProtocols(data.protocols);
     } catch (err) {
-      console.error('AI Protocol error:', err);
-      setAiProtocolError(err instanceof Error ? err.message : 'Failed to load AI recommendations');
+      console.error('[Transform] client error:', err);
+      setAfterImageError('Failed to generate after photo');
     } finally {
-      setIsLoadingAiProtocols(false);
+      setIsGeneratingAfter(false);
     }
-  };
+  }, [capturedImage, analysisResult, isAuthenticated, isPremium, protocols, afterImageUrl, setAfterImageUrl]);
+
+  // Auto-generate only when there is no saved after-image for this photo
+  useEffect(() => {
+    if (
+      viewMode === 'results' &&
+      isAuthenticated &&
+      isPremium &&
+      capturedImage &&
+      analysisResult &&
+      !afterImageUrl &&
+      !isGeneratingAfter &&
+      afterHydratedRef.current &&
+      autoGenAttemptRef.current !== capturedImage
+    ) {
+      autoGenAttemptRef.current = capturedImage;
+      void generateAfterImage(false);
+    }
+  }, [
+    viewMode,
+    isAuthenticated,
+    isPremium,
+    capturedImage,
+    analysisResult,
+    afterImageUrl,
+    isGeneratingAfter,
+    generateAfterImage,
+  ]);
 
   // Check if user already has a leaderboard entry
   const hasLeaderboardEntry = dbUser?.leaderboardEntry != null;
@@ -391,11 +499,22 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen bg-[#0c0c0f] flex flex-col lg:flex-row items-center justify-center gap-8 p-6 lg:p-12 relative overflow-hidden">
+    <main
+      className={`bg-black ${
+        viewMode === 'results'
+          ? 'fixed inset-0 overflow-hidden'
+          : 'relative min-h-screen'
+      }`}
+    >
       {/* User Menu - Top Right */}
-      <div className="absolute top-4 right-4 z-30">
+      <div className="fixed top-4 right-4 z-30">
         <UserMenu />
       </div>
+
+      {/* Marketing funnel — camera / welcome only */}
+      {viewMode === 'camera' && (
+        <MarketingLanding onStartScan={scrollToScan} onStartTrial={openTransformPaywall} />
+      )}
 
       {/* Flashlight glow ring effect */}
       <AnimatePresence>
@@ -427,19 +546,54 @@ export default function Home() {
       </AnimatePresence>
 
 
+      {/* Referral Welcome Toast */}
+      <AnimatePresence>
+        {showReferralWelcome && (
+          <motion.div
+            initial={{ opacity: 0, y: -50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -50 }}
+            className="fixed top-20 left-1/2 -translate-x-1/2 z-50"
+          >
+            <div className="bg-gradient-to-r from-[#22c55e] to-emerald-500 text-white px-6 py-3 rounded-xl shadow-lg shadow-green-500/30 flex items-center gap-3">
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
+              </svg>
+              <div>
+                <p className="font-semibold">Welcome! 7-day free trial unlocked</p>
+                <p className="text-sm text-white/80">Your referral trial has been applied</p>
+              </div>
+              <button
+                onClick={() => setShowReferralWelcome(false)}
+                className="ml-2 p-1 hover:bg-white/20 rounded transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Auth Modal */}
       <AuthModal
         isOpen={showAuthModal}
         onClose={() => setShowAuthModal(false)}
         onSuccess={handleAuthSuccess}
         pendingAction={authFeature}
+        initialReferralCode={referralCode || undefined}
         title={
-          authFeature === 'leaderboard' ? 'Sign in for Leaderboard' : 
-          authFeature === 'flaws' ? 'Sign in to View Flaws' :
-          'Sign in for Protocol'
+          referralCode 
+            ? 'Sign up to claim your reward!' 
+            : authFeature === 'leaderboard' ? 'Sign in for Leaderboard' : 
+            authFeature === 'flaws' ? 'Sign in to View Flaws' :
+            'Sign in for Protocol'
         }
         description={
-          authFeature === 'leaderboard' 
+          referralCode
+            ? 'Create a free account with this referral code to get a 7-day Premium trial'
+            : authFeature === 'leaderboard' 
             ? 'Create a free account to view and join the leaderboard' 
             : authFeature === 'flaws'
             ? 'Create a free account to see what\'s holding you back'
@@ -447,291 +601,228 @@ export default function Home() {
         }
       />
 
-      {/* EXPANDED PROTOCOL VIEW - Full screen overlay (only if authenticated) */}
+      {/* Protocol platform — full screen (authenticated) */}
       <AnimatePresence>
         {showProtocol && viewMode === 'results' && analysisResult && isAuthenticated && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-40 bg-[#0c0c0f]/95 backdrop-blur-xl"
-          >
-            <div className="h-full flex flex-col lg:flex-row">
-              {/* Left side - Face preview (smaller on desktop) */}
-              <div className="lg:w-[400px] flex-shrink-0 p-6 lg:p-8 flex flex-col">
-                {/* Header */}
-                <div className="flex items-center justify-between mb-6">
-                  <button
-                    onClick={() => setShowProtocol(false)}
-                    className="flex items-center gap-2 text-zinc-400 hover:text-white transition-colors"
-                  >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
-                    <span className="text-sm">Back to Analysis</span>
-                  </button>
-                  <div className="flex items-center gap-2">
-                    <span 
-                      className="text-2xl font-bold"
-                      style={{ 
-                        color: analysisResult.overallScore >= 8 ? '#22c55e' : 
-                               analysisResult.overallScore >= 6.5 ? '#84cc16' : 
-                               analysisResult.overallScore >= 5 ? '#eab308' : '#ef4444'
-                      }}
-                    >
-                      {analysisResult.overallScore.toFixed(1)}
-                    </span>
-                    <span className="text-zinc-500">/10</span>
-                  </div>
-                </div>
-
-                {/* Face preview */}
-                {capturedImage && (
-                  <div className="relative flex-1 rounded-2xl overflow-hidden bg-zinc-900 border border-zinc-800 max-h-[300px] lg:max-h-none">
-                    <img 
-                      src={capturedImage} 
-                      alt="Your face" 
-                      className="w-full h-full object-cover"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                    <div className="absolute bottom-4 left-4">
-                      <p className="text-white font-semibold">Your Analysis</p>
-                      <p className="text-zinc-400 text-sm">{analysisResult.rarity}</p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Quick stats */}
-                <div className="grid grid-cols-2 gap-3 mt-4">
-                  <div className="bg-zinc-900/50 rounded-xl p-3 border border-zinc-800">
-                    <p className="text-xs text-zinc-500 mb-1">Harmony</p>
-                    <p className="text-lg font-semibold text-white">{analysisResult.categoryScores.harm.toFixed(1)}</p>
-                  </div>
-                  <div className="bg-zinc-900/50 rounded-xl p-3 border border-zinc-800">
-                    <p className="text-xs text-zinc-500 mb-1">Angularity</p>
-                    <p className="text-lg font-semibold text-white">{analysisResult.categoryScores.angu.toFixed(1)}</p>
-                  </div>
-                  <div className="bg-zinc-900/50 rounded-xl p-3 border border-zinc-800">
-                    <p className="text-xs text-zinc-500 mb-1">Dimorphism</p>
-                    <p className="text-lg font-semibold text-white">{analysisResult.categoryScores.dimo.toFixed(1)}</p>
-                  </div>
-                  <div className="bg-zinc-900/50 rounded-xl p-3 border border-zinc-800">
-                    <p className="text-xs text-zinc-500 mb-1">Misc</p>
-                    <p className="text-lg font-semibold text-white">{analysisResult.categoryScores.misc.toFixed(1)}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Right side - Protocols (expanded) */}
-              <div className="flex-1 p-6 lg:p-8 overflow-y-auto">
-                {/* Protocol header */}
-                <div className="flex items-center justify-between mb-6">
-                  <div>
-                    <h2 className="text-2xl font-bold text-white mb-1">
-                      Improvement Protocol
-                    </h2>
-                    <p className="text-zinc-500 text-sm">
-                      Personalized recommendations based on your analysis
-                    </p>
-                  </div>
-                  <ToggleSwitch
-                    leftLabel="Softmax"
-                    rightLabel="Hardmax"
-                    isRight={protocolType === 'hardmax'}
-                    onChange={(isRight) => setProtocolType(isRight ? 'hardmax' : 'softmax')}
-                  />
-                </div>
-
-                {/* AI Protocol Generation Button */}
-                {isPremium && (
-                  <div className="mb-4">
-                    <motion.button
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={fetchAiProtocols}
-                      disabled={isLoadingAiProtocols}
-                      className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500/20 to-blue-500/20 hover:from-purple-500/30 hover:to-blue-500/30 border border-purple-500/30 rounded-lg transition-all"
-                    >
-                      {isLoadingAiProtocols ? (
-                        <>
-                          <svg className="w-4 h-4 animate-spin text-purple-400" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                          </svg>
-                          <span className="text-sm text-purple-300">Generating AI recommendations...</span>
-                        </>
-                      ) : (
-                        <>
-                          <svg className="w-4 h-4 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                          </svg>
-                          <span className="text-sm text-purple-300">
-                            {aiProtocols.length > 0 ? 'Regenerate AI Recommendations' : 'Generate AI Recommendations'}
-                          </span>
-                        </>
-                      )}
-                    </motion.button>
-                    
-                    {aiProtocolError && (
-                      <p className="text-xs text-red-400 mt-2">{aiProtocolError}</p>
-                    )}
-                  </div>
-                )}
-
-                {/* Protocol content - much larger area */}
-                <div className="bg-zinc-900/30 rounded-2xl border border-zinc-800/50 p-6 min-h-[500px]">
-                  {/* Show AI protocols if available, otherwise show default */}
-                  <ProtocolRecommendation protocols={aiProtocols.length > 0 ? aiProtocols : protocols} />
-                  
-                  {/* Premium badge */}
-                  {aiProtocols.length > 0 && (
-                    <div className="mt-4 flex items-center gap-2 text-purple-400 text-xs">
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                      </svg>
-                      <span>AI-Powered Recommendations</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </motion.div>
+          <ProtocolPlatform
+            analysisResult={analysisResult}
+            capturedImage={capturedImage}
+            afterImageUrl={afterImageUrl}
+            isGeneratingAfter={isGeneratingAfter}
+            onClose={() => setShowProtocol(false)}
+            onAfterGenerated={(url) => setAfterImageUrl(url)}
+          />
         )}
       </AnimatePresence>
 
-      {/* Header / Branding + Potential Score (visible on larger screens) */}
+      {/* Centered stage — absolute fill + flex center (works when logged in) */}
+      <div
+        id="scan"
+        className={
+          viewMode === 'results'
+            ? 'absolute inset-0 flex flex-col lg:flex-row items-center justify-center gap-4 p-3 lg:p-6 lg:gap-6'
+            : 'relative w-full min-h-screen flex flex-col lg:flex-row items-center justify-center gap-8 p-6 lg:p-12 scroll-mt-4'
+        }
+      >
+      {/* Left: brand + subscription / transform (uses empty side of screen) */}
       <motion.div
         initial={{ opacity: 0, x: -20 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ delay: 0.2 }}
-        className="lg:flex-1 lg:max-w-md"
+        className="w-full lg:flex-1 lg:max-w-sm xl:max-w-md shrink-0"
       >
-        <h1 className="text-2xl lg:text-4xl font-bold text-white mb-2">
-          Welcome to <span className="text-[#22c55e]">Clavicular.AI</span>
+        <h1 className={`font-bold text-white mb-1 ${viewMode === 'results' ? 'text-xl lg:text-3xl' : 'text-2xl lg:text-4xl mb-2'}`}>
+          {viewMode === 'results' ? (
+            <>
+              Welcome to <span className="text-[#22c55e]">Clavicular.AI</span>
+            </>
+          ) : (
+            <>
+              Your turn. <span className="text-[#22c55e]">Scan now.</span>
+            </>
+          )}
         </h1>
-        <p className="text-zinc-500 text-sm lg:text-base hidden lg:block">
-          Find out where you really stand. Get your face rated and see how you stack up on the leaderboard.
+        <p className={`text-white/50 hidden lg:block ${viewMode === 'results' ? 'text-xs lg:text-sm' : 'text-sm lg:text-base'}`}>
+          {viewMode === 'results'
+            ? 'Your analysis found the gap. Close it.'
+            : 'Free face rating in seconds. Then unlock fashion, physique, and your protocol.'}
         </p>
 
-        {/* Potential Score Section - Only visible to logged-in users with results */}
+        {/* Subscription / transform — left column */}
         <AnimatePresence>
-          {isAuthenticated && viewMode === 'results' && analysisResult && (
+          {viewMode === 'results' && analysisResult && (
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 20 }}
-              transition={{ delay: 0.3 }}
-              className="hidden lg:block mt-8"
+              exit={{ opacity: 0, y: 12 }}
+              className="mt-3 lg:mt-4"
             >
-              <div className="bg-black rounded-2xl border border-zinc-800 p-6 relative overflow-hidden">
-                
-                {/* Header */}
-                <p className="text-xs text-zinc-500 mb-4">Your Potential</p>
+              {(() => {
+                const potential = Math.min(
+                  10,
+                  analysisResult.overallScore +
+                    protocols.reduce((sum, p) => sum + p.impactScore, 0) * 0.5
+                );
+                const gain = potential - analysisResult.overallScore;
+                const topFlaws = [...analysisResult.features]
+                  .filter((f) => !f.isStrength)
+                  .sort((a, b) => Math.abs(b.deviation) - Math.abs(a.deviation))
+                  .slice(0, 3);
 
-                {/* Current vs Potential Score */}
-                <div className="flex items-center justify-center gap-6 mb-4">
-                  <span 
-                    className="text-3xl font-bold"
-                    style={{ 
-                      color: analysisResult.overallScore >= 8 ? '#22c55e' : 
-                             analysisResult.overallScore >= 6.5 ? '#84cc16' : 
-                             analysisResult.overallScore >= 5 ? '#eab308' : '#ef4444'
-                    }}
-                  >
-                    {analysisResult.overallScore.toFixed(1)}
-                  </span>
-                  <svg className="w-5 h-5 text-zinc-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
-                  </svg>
-                  <span className="text-3xl font-bold text-[#22c55e]">
-                    {Math.min(10, analysisResult.overallScore + (protocols.reduce((sum, p) => sum + p.impactScore, 0) * 0.5)).toFixed(1)}
-                  </span>
-                </div>
+                return (
+                  <div className="rounded-2xl border border-[#22c55e]/35 bg-gradient-to-b from-[#22c55e]/10 to-transparent p-4 space-y-3.5">
+                    {!isPremium ? (
+                      <>
+                        <div>
+                          <p className="text-[10px] uppercase tracking-[0.2em] text-[#22c55e] font-bold mb-2">
+                            Your score is capped
+                          </p>
+                          <div className="flex items-end justify-between gap-3">
+                            <div className="flex items-baseline gap-2">
+                              <span className="text-4xl font-bold text-white tabular-nums leading-none">
+                                {analysisResult.overallScore.toFixed(1)}
+                              </span>
+                              <span className="text-white/25 text-xl font-light">→</span>
+                              <span className="text-4xl font-bold text-[#22c55e] tabular-nums leading-none">
+                                {potential.toFixed(1)}
+                              </span>
+                            </div>
+                            <div className="text-right shrink-0 pb-0.5">
+                              <p className="text-lg font-bold text-[#22c55e] leading-none">
+                                +{gain.toFixed(1)}
+                              </p>
+                              <p className="text-[10px] text-white/40 mt-0.5">pts available</p>
+                            </div>
+                          </div>
+                          <p className="text-xs text-white/55 mt-2 leading-snug">
+                            Unlock the protocol built for your face. See the AI after before you
+                            commit.
+                          </p>
+                        </div>
 
-                {/* Improvement estimate */}
-                <div className="bg-black/30 rounded-xl p-3 mb-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-zinc-400">Estimated improvement</span>
-                    <span className="text-sm font-semibold text-[#22c55e]">
-                      +{(protocols.reduce((sum, p) => sum + p.impactScore, 0) * 0.5).toFixed(1)} pts
-                    </span>
-                  </div>
-                  <div className="mt-2 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{ width: `${(analysisResult.overallScore / 10) * 100}%` }}
-                      className="h-full bg-gradient-to-r from-zinc-600 to-zinc-500 rounded-full relative"
-                    >
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: `${Math.min(100, (protocols.reduce((sum, p) => sum + p.impactScore, 0) * 0.5 / analysisResult.overallScore) * 100)}%` }}
-                        transition={{ delay: 0.5 }}
-                        className="absolute right-0 top-0 h-full bg-gradient-to-r from-[#22c55e]/50 to-[#22c55e] rounded-full"
-                        style={{ transform: 'translateX(100%)' }}
-                      />
-                    </motion.div>
-                  </div>
-                </div>
+                        <button
+                          type="button"
+                          onClick={openTransformPaywall}
+                          className="relative w-full rounded-xl overflow-hidden border border-white/15 group"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src="/transformation.png"
+                            alt="Facial transformation before and after"
+                            className="w-full aspect-[16/10] object-cover"
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+                          <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between">
+                            <span className="text-[10px] font-semibold uppercase tracking-wide text-white/90 bg-black/60 px-2 py-0.5 rounded">
+                              Before
+                            </span>
+                            <span className="text-[10px] font-bold uppercase tracking-wide text-black bg-[#22c55e] px-2 py-0.5 rounded">
+                              After · Unlock yours
+                            </span>
+                          </div>
+                        </button>
 
-                {/* CTA Button */}
-                {isPremium ? (
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={handleViewProtocol}
-                    className="w-full py-3 bg-gradient-to-r from-[#22c55e] to-[#16a34a] hover:from-[#16a34a] hover:to-[#15803d] text-white font-semibold rounded-xl transition-all shadow-lg shadow-green-500/20"
-                  >
-                    View Your Protocol
-                  </motion.button>
-                ) : (
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => {
-                      setPaymentFeature('protocol');
-                      setShowPaymentModal(true);
-                    }}
-                    className="w-full py-3 bg-gradient-to-r from-[#22c55e] to-[#16a34a] hover:from-[#16a34a] hover:to-[#15803d] text-white font-semibold rounded-xl transition-all shadow-lg shadow-green-500/20"
-                  >
-                    <span className="flex items-center justify-center gap-2">
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                      </svg>
-                      Unlock Protocol - $9.99
-                    </span>
-                  </motion.button>
-                )}
+                        {topFlaws.length > 0 && (
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wider text-white/40 mb-2">
+                              Fix these first
+                            </p>
+                            <ol className="space-y-1.5">
+                              {topFlaws.map((f, i) => (
+                                <li
+                                  key={f.id}
+                                  className="flex items-center gap-2 text-[12px] text-white/85"
+                                >
+                                  <span className="w-5 h-5 rounded bg-white/10 text-white/50 text-[10px] font-bold flex items-center justify-center shrink-0">
+                                    {i + 1}
+                                  </span>
+                                  <span className="truncate">{f.name}</span>
+                                  <span className="ml-auto text-white/35 tabular-nums text-[11px]">
+                                    {f.value.toFixed(1)}
+                                  </span>
+                                </li>
+                              ))}
+                            </ol>
+                          </div>
+                        )}
 
-                {/* What's included */}
-                <div className="mt-4 space-y-2">
-                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider">What&apos;s included:</p>
-                  <div className="flex items-center gap-2 text-xs text-zinc-400">
-                    <svg className="w-3 h-3 text-[#22c55e]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    <span>AI-personalized recommendations</span>
+                        <div className="space-y-2">
+                          <button
+                            onClick={openTransformPaywall}
+                            className="w-full py-3.5 bg-[#22c55e] hover:bg-white text-black text-sm font-bold rounded-xl transition-colors"
+                          >
+                            Start 7-day free trial
+                          </button>
+                          <p className="text-center text-[11px] text-white/45 leading-relaxed">
+                            Yearly includes trial · then $399/yr
+                            <span className="text-white/25"> · </span>
+                            or $50/mo
+                          </p>
+                          <p className="text-center text-[10px] text-white/30">
+                            AI future-self · Style & makeup · Fitness · Beauty Bot · cancel anytime
+                          </p>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="text-center">
+                          <p className="text-[10px] uppercase tracking-[0.18em] text-[#22c55e] font-semibold mb-1.5">
+                            Protocol unlocked
+                          </p>
+                          <div className="flex items-baseline justify-center gap-2.5">
+                            <span className="text-3xl font-bold text-white tabular-nums">
+                              {analysisResult.overallScore.toFixed(1)}
+                            </span>
+                            <span className="text-white/30 text-lg">→</span>
+                            <span className="text-3xl font-bold text-[#22c55e] tabular-nums">
+                              {potential.toFixed(1)}
+                            </span>
+                          </div>
+                        </div>
+                        <BeforeAfterReveal
+                          beforeImage={capturedImage}
+                          afterImage={afterImageUrl}
+                          isLocked={false}
+                          isLoading={isGeneratingAfter}
+                          onUnlock={() => {}}
+                          compact
+                          hideCta
+                        />
+                        {!afterImageUrl && !isGeneratingAfter && afterImageError && (
+                          <button
+                            type="button"
+                            onClick={() => void generateAfterImage(true)}
+                            className="w-full py-2 rounded-lg border border-white/15 text-white/60 hover:text-white hover:border-white/30 text-[11px] transition-colors"
+                          >
+                            After photo failed to generate. Tap to retry.
+                          </button>
+                        )}
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            onClick={handleViewProtocol}
+                            className="py-2.5 bg-[#22c55e] hover:bg-white text-black text-xs font-bold rounded-xl transition-colors"
+                          >
+                            View Protocol
+                          </button>
+                          <button
+                            onClick={() => setShowBeautyBot(true)}
+                            className="py-2.5 bg-black border border-white/25 hover:border-[#22c55e] text-white text-xs font-semibold rounded-xl transition-colors"
+                          >
+                            Beauty Bot
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </div>
-                  <div className="flex items-center gap-2 text-xs text-zinc-400">
-                    <svg className="w-3 h-3 text-[#22c55e]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    <span>Product links & pricing</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs text-zinc-400">
-                    <svg className="w-3 h-3 text-[#22c55e]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    <span>Softmax & Hardmax options</span>
-                  </div>
-                </div>
-              </div>
+                );
+              })()}
             </motion.div>
           )}
         </AnimatePresence>
       </motion.div>
 
       {/* iPhone with Camera/Results */}
-      <div className="flex flex-col items-center gap-4">
+      <div className={`flex flex-col items-center gap-2 shrink-0 ${viewMode === 'results' ? 'lg:scale-[0.92] origin-center' : ''}`}>
         {/* Error display */}
         <AnimatePresence>
           {analysisError && viewMode === 'camera' && (
@@ -811,28 +902,26 @@ export default function Home() {
                           exit={{ opacity: 0, scale: 0.9, y: -10 }}
                           className="absolute top-full right-0 mt-2 z-50"
                         >
-                          <div className="bg-black border border-zinc-700 rounded-xl p-4 shadow-2xl w-64">
+                          <div className="bg-black border border-zinc-700 rounded-lg p-3 shadow-2xl w-44">
                             {/* Arrow pointing up */}
-                            <div className="absolute -top-2 right-4 w-4 h-4 bg-black border-l border-t border-zinc-700 transform rotate-45" />
+                            <div className="absolute -top-2 right-3 w-3 h-3 bg-black border-l border-t border-zinc-700 transform rotate-45" />
                             
                             <div className="relative">
-                              <div className="flex items-start gap-3 mb-3">
-                                <div className="w-8 h-8 rounded-lg bg-[#22c55e]/20 flex items-center justify-center flex-shrink-0">
-                                  <svg className="w-4 h-4 text-[#22c55e]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <div className="flex items-center gap-2 mb-2">
+                                <div className="w-6 h-6 rounded bg-[#22c55e]/20 flex items-center justify-center flex-shrink-0">
+                                  <svg className="w-3 h-3 text-[#22c55e]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
                                   </svg>
                                 </div>
-                                <div>
-                                  <h4 className="text-sm font-semibold text-white mb-1">Share Your Results</h4>
-                                  <p className="text-xs text-zinc-400 leading-relaxed">
-                                    Generate a shareable link to show off your score! Links expire after 24 hours.
-                                  </p>
-                                </div>
+                                <h4 className="text-xs font-semibold text-white">Share Results</h4>
                               </div>
+                              <p className="text-[10px] text-zinc-400 leading-relaxed mb-2">
+                                Generate a link to show off your score!
+                              </p>
                               
                               <button
                                 onClick={dismissShareTooltip}
-                                className="w-full py-2 bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-medium rounded-lg transition-colors"
+                                className="w-full py-1.5 bg-zinc-800 hover:bg-zinc-700 text-white text-[10px] font-medium rounded transition-colors"
                               >
                                 Got it!
                               </button>
@@ -863,17 +952,10 @@ export default function Home() {
                       className="bg-black/70 backdrop-blur-md rounded-xl p-3 border border-zinc-800"
                     >
                       <div className="flex items-baseline gap-1">
-                        <span 
-                          className="text-3xl font-bold"
-                          style={{ 
-                            color: analysisResult.overallScore >= 8 ? '#22c55e' : 
-                                   analysisResult.overallScore >= 6.5 ? '#84cc16' : 
-                                   analysisResult.overallScore >= 5 ? '#eab308' : '#ef4444'
-                          }}
-                        >
+                        <span className="text-3xl font-bold text-[#22c55e]">
                           {analysisResult.overallScore.toFixed(1)}
                         </span>
-                        <span className="text-xs text-zinc-500">/10</span>
+                        <span className="text-xs text-white/40">/10</span>
                       </div>
                     </motion.div>
                   </div>
@@ -892,208 +974,104 @@ export default function Home() {
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 20 }}
-            className="w-full lg:w-[380px] lg:flex-shrink-0"
+            className="w-full lg:w-[320px] xl:w-[360px] lg:flex-shrink-0"
           >
-            {/* Toggle between flaws/strengths + Leaderboard buttons */}
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <ToggleSwitch
-                  leftLabel="Flaws"
-                  rightLabel="Strengths"
-                  isRight={resultsView === 'strengths'}
-                  onChange={(isRight) => {
-                    if (!isRight && !isAuthenticated) {
-                      // Trying to view flaws without being signed in
+            <div className="rounded-2xl border border-white/10 bg-black/60 p-4">
+              {/* Score strip */}
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <p className="text-[10px] uppercase tracking-[0.16em] text-white/35 font-medium">
+                    Analysis
+                  </p>
+                  <p className="text-xs text-white/50 mt-0.5 truncate max-w-[160px]">
+                    {analysisResult.rarity}
+                  </p>
+                </div>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-2xl font-bold text-white tabular-nums">
+                    {analysisResult.overallScore.toFixed(1)}
+                  </span>
+                  <span className="text-xs text-white/30">/10</span>
+                </div>
+              </div>
+
+              {/* Segmented control — full width */}
+              <div className="grid grid-cols-2 rounded-xl border border-white/10 p-1 mb-1 bg-white/[0.03]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!isAuthenticated) {
                       setAuthFeature('flaws');
                       setShowAuthModal(true);
                       return;
                     }
-                    setResultsView(isRight ? 'strengths' : 'flaws');
-                    setSelectedFeatureId(null); // Clear selection when switching views
+                    setResultsView('flaws');
+                    setSelectedFeatureId(null);
                   }}
-                />
-                {/* Lock icon when not authenticated */}
-                {!isAuthenticated && resultsView === 'strengths' && (
-                  <svg className="w-4 h-4 text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                  </svg>
-                )}
-              </div>
-              
-              {/* Leaderboard buttons */}
-              <div className="flex items-center gap-2">
-                {/* View Leaderboard button - always available */}
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={handleViewLeaderboard}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-black border border-white/30 hover:border-white/50 rounded-lg transition-all"
+                  className={`py-2 text-xs font-semibold rounded-lg transition-colors ${
+                    resultsView === 'flaws'
+                      ? 'bg-[#22c55e] text-black'
+                      : 'text-white/45 hover:text-white'
+                  }`}
                 >
-                  {!isAuthenticated && (
-                    <svg className="w-3 h-3 text-[#22c55e]/70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                    </svg>
-                  )}
-                  <svg className="w-4 h-4 text-[#22c55e]" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M12 2C13.1 2 14 2.9 14 4V5H19C19.55 5 20 5.45 20 6V8C20 10.21 18.21 12 16 12H15.9C15.5 13.85 13.96 15.25 12.1 15.46V17H15C15.55 17 16 17.45 16 18V21C16 21.55 15.55 22 15 22H9C8.45 22 8 21.55 8 21V18C8 17.45 8.45 17 9 17H10V15.46C8.04 15.25 6.5 13.85 6.1 12H6C3.79 12 2 10.21 2 8V6C2 5.45 2.45 5 3 5H8V4C8 2.9 8.9 2 10 2H12Z" />
-                  </svg>
-                </motion.button>
-
-                {/* Join/Update button - depends on existing entry */}
-                {isAuthenticated ? (
-                  hasLeaderboardEntry ? (
-                    <motion.button
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      onClick={handleUpdateLeaderboard}
-                      disabled={isSubmittingToLeaderboard}
-                      className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-[#22c55e] to-[#16a34a] hover:from-[#16a34a] hover:to-[#15803d] text-white text-sm font-medium rounded-lg transition-all shadow-lg shadow-green-500/20 disabled:opacity-50"
-                    >
-                      {isSubmittingToLeaderboard ? (
-                        <>
-                          <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                          </svg>
-                          <span>Updating...</span>
-                        </>
-                      ) : (
-                        <>
-                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                          </svg>
-                          <span>Update</span>
-                        </>
-                      )}
-                    </motion.button>
-                  ) : (
-                    <motion.button
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      onClick={handleJoinLeaderboard}
-                      className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-[#22c55e] to-[#16a34a] hover:from-[#16a34a] hover:to-[#15803d] text-white text-sm font-medium rounded-lg transition-all shadow-lg shadow-green-500/20"
-                    >
-                      <span>Join</span>
-                    </motion.button>
-                  )
-                ) : (
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={handleJoinLeaderboard}
-                    className="flex items-center gap-2 px-3 py-1.5 bg-black border border-[#22c55e]/50 hover:border-[#22c55e] text-[#22c55e] text-sm font-medium rounded-lg transition-all"
-                  >
-                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                    </svg>
-                    <span>Join</span>
-                  </motion.button>
-                )}
+                  Flaws
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setResultsView('strengths');
+                    setSelectedFeatureId(null);
+                  }}
+                  className={`py-2 text-xs font-semibold rounded-lg transition-colors ${
+                    resultsView === 'strengths'
+                      ? 'bg-[#22c55e] text-black'
+                      : 'text-white/45 hover:text-white'
+                  }`}
+                >
+                  Strengths
+                </button>
               </div>
-            </div>
 
-            {/* Content area */}
-            <div className="bg-zinc-900/50 rounded-2xl border border-zinc-800 p-4 min-h-[400px] max-h-[500px] overflow-y-auto">
+              <p className="text-[10px] text-white/30 mb-1 px-0.5">
+                Tap a row to highlight on face
+              </p>
+
               <FlawsList features={analysisResult.features} />
-            </div>
 
-            {/* Ad Banner - Only shown to non-premium users */}
-            {!isPremium && (
-              <div className="mt-3">
-                <AdBanner 
-                  format="banner" 
-                  slot="results-panel-banner"
-                  className="rounded-xl overflow-hidden"
-                />
+              {/* Leaderboard — minimal footer */}
+              <div className="mt-3 pt-3 border-t border-white/10 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleViewLeaderboard}
+                  className="flex-1 py-2 rounded-lg text-white/70 text-xs font-medium hover:text-white hover:bg-white/[0.04] transition-colors"
+                >
+                  Leaderboard
+                </button>
+                <button
+                  type="button"
+                  onClick={
+                    isAuthenticated && hasLeaderboardEntry
+                      ? handleUpdateLeaderboard
+                      : handleJoinLeaderboard
+                  }
+                  disabled={isSubmittingToLeaderboard}
+                  className="flex-1 py-2 rounded-lg bg-[#22c55e] hover:bg-white text-black text-xs font-bold transition-colors disabled:opacity-50"
+                >
+                  {isSubmittingToLeaderboard
+                    ? 'Saving…'
+                    : isAuthenticated && hasLeaderboardEntry
+                      ? leaderboardSuccess
+                        ? `Rank #${leaderboardSuccess.rank}`
+                        : 'Update rank'
+                      : 'Join board'}
+                </button>
               </div>
-            )}
-
-            {/* Mobile Potential Score Card - Only on mobile for logged-in users */}
-            {isAuthenticated && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="lg:hidden mt-3 bg-black rounded-xl border border-zinc-800 p-4"
-              >
-                <div className="flex flex-col items-center mb-3">
-                  <span className="text-xs text-zinc-500 mb-2">Your Potential</span>
-                  <div className="flex items-center justify-center gap-4 text-xs">
-                    <span 
-                      className="text-xl font-bold"
-                      style={{ 
-                        color: analysisResult.overallScore >= 8 ? '#22c55e' : 
-                               analysisResult.overallScore >= 6.5 ? '#84cc16' : 
-                               analysisResult.overallScore >= 5 ? '#eab308' : '#ef4444'
-                      }}
-                    >
-                      {analysisResult.overallScore.toFixed(1)}
-                    </span>
-                    <span className="text-zinc-500">→</span>
-                    <span className="text-xl font-bold text-[#22c55e]">
-                      {Math.min(10, analysisResult.overallScore + (protocols.reduce((sum, p) => sum + p.impactScore, 0) * 0.5)).toFixed(1)}
-                    </span>
-                  </div>
-                </div>
-                
-                {isPremium ? (
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={handleViewProtocol}
-                    className="w-full py-2.5 bg-gradient-to-r from-[#22c55e] to-[#16a34a] text-white text-sm font-semibold rounded-lg"
-                  >
-                    View Your Protocol
-                  </motion.button>
-                ) : (
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => {
-                      setPaymentFeature('protocol');
-                      setShowPaymentModal(true);
-                    }}
-                    className="w-full py-2.5 bg-gradient-to-r from-[#22c55e] to-[#16a34a] text-white text-sm font-semibold rounded-lg flex items-center justify-center gap-2"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                    </svg>
-                    Unlock Protocol - $9.99
-                  </motion.button>
-                )}
-              </motion.div>
-            )}
-
-            {/* Leaderboard rank badge - shown after submission or for existing entry */}
-            {(leaderboardSuccess || hasLeaderboardEntry) && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="w-full mt-3 py-3 px-6 bg-black border border-[#22c55e]/30 rounded-xl"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <svg className="w-4 h-4 text-[#22c55e]" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M12 2C13.1 2 14 2.9 14 4V5H19C19.55 5 20 5.45 20 6V8C20 10.21 18.21 12 16 12H15.9C15.5 13.85 13.96 15.25 12.1 15.46V17H15C15.55 17 16 17.45 16 18V21C16 21.55 15.55 22 15 22H9C8.45 22 8 21.55 8 21V18C8 17.45 8.45 17 9 17H10V15.46C8.04 15.25 6.5 13.85 6.1 12H6C3.79 12 2 10.21 2 8V6C2 5.45 2.45 5 3 5H8V4C8 2.9 8.9 2 10 2H12Z" />
-                    </svg>
-                    <span className="text-[#22c55e] font-semibold">
-                      {leaderboardSuccess 
-                        ? `You're ranked #${leaderboardSuccess.rank}!`
-                        : `Score: ${dbUser?.leaderboardEntry?.overallScore.toFixed(1)}/10`
-                      }
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => setShowLeaderboard(true)}
-                    className="text-[#22c55e]/80 text-sm hover:text-[#22c55e] transition-colors"
-                  >
-                    View →
-                  </button>
-                </div>
-              </motion.div>
-            )}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
+      </div>
+      {/* end centered stage */}
 
       {/* Leaderboard Entry Modal */}
       <LeaderboardEntryModal
@@ -1112,6 +1090,10 @@ export default function Home() {
       <Leaderboard
         isOpen={showLeaderboard}
         onClose={() => setShowLeaderboard(false)}
+        onTransformCta={() => {
+          setShowLeaderboard(false);
+          openTransformPaywall();
+        }}
       />
 
       {/* Share Modal */}
@@ -1130,13 +1112,47 @@ export default function Home() {
         onClose={() => setShowPaymentModal(false)}
         onSuccess={async () => {
           await refreshDbUser();
-          // Open protocol after successful payment
           if (analysisResult) {
             setShowProtocol(true);
-            fetchAiProtocols();
           }
         }}
       />
+
+      {/* Beauty Bot overlay (opened from left column) */}
+      <AnimatePresence>
+        {showBeautyBot && isPremium && analysisResult && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/80 z-50"
+              onClick={() => setShowBeautyBot(false)}
+            />
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 20 }}
+              className="fixed inset-x-4 top-1/2 -translate-y-1/2 z-50 max-w-lg mx-auto"
+            >
+              <div className="flex justify-end mb-2">
+                <button
+                  onClick={() => setShowBeautyBot(false)}
+                  className="text-white/70 hover:text-white text-sm px-2"
+                >
+                  Close
+                </button>
+              </div>
+              <BeautyBot
+                image={capturedImage}
+                features={analysisResult.features}
+                overallScore={analysisResult.overallScore}
+                onAfterGenerated={(url) => setAfterImageUrl(url)}
+              />
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </main>
   );
 }

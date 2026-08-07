@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useSyncExternalStore } from 'react';
 import { supabase } from './supabase';
 import type { User, Session } from '@supabase/supabase-js';
 
-interface DatabaseUser {
+export interface DatabaseUser {
   id: string;
   email: string;
   name: string | null;
@@ -12,6 +12,11 @@ interface DatabaseUser {
   avatarUrl: string | null;
   age: number | null;
   accessTier: string;
+  subscriptionId?: string | null;
+  subscriptionPlan?: string | null;
+  subscriptionStatus?: string | null;
+  trialEndsAt?: string | Date | null;
+  currentPeriodEnd?: string | Date | null;
   leaderboardEntry: {
     id: string;
     overallScore: number;
@@ -19,6 +24,8 @@ interface DatabaseUser {
     age: number;
     name: string;
   } | null;
+  referralCode: string | null;
+  referralCount: number;
 }
 
 interface AuthState {
@@ -63,14 +70,24 @@ function setGlobalAuthState(newState: Partial<AuthState>) {
 let initialized = false;
 let initPromise: Promise<void> | null = null;
 
-async function syncUserToDatabase(session: Session) {
+async function syncUserToDatabase(session: Session, referralCode?: string | null) {
   try {
+    // Check sessionStorage for referral code from OAuth flow
+    let codeToUse = referralCode;
+    if (!codeToUse && typeof window !== 'undefined') {
+      codeToUse = sessionStorage.getItem('auth_referral_code');
+      if (codeToUse) {
+        sessionStorage.removeItem('auth_referral_code'); // Clear after use
+      }
+    }
+
     const response = await fetch('/api/auth/sync', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${session.access_token}`,
       },
+      body: JSON.stringify({ referralCode: codeToUse }),
     });
 
     if (response.ok) {
@@ -78,6 +95,12 @@ async function syncUserToDatabase(session: Session) {
       setGlobalAuthState({
         dbUser: data.user as DatabaseUser,
       });
+      
+      // Show a notification if referral was applied
+      if (data.referralApplied && typeof window !== 'undefined') {
+        // Store in sessionStorage to show welcome message
+        sessionStorage.setItem('referral_applied', 'true');
+      }
     }
   } catch (error) {
     console.error('Failed to sync user to database:', error);

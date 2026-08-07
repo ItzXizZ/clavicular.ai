@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/authMiddleware';
 import { prisma } from '@/lib/db';
 import OpenAI from 'openai';
+import { isPremiumUser } from '@/lib/subscription';
+import { linkForRecommendation } from '@/lib/productLinks';
 import type { FeatureAnalysis, ProtocolRecommendation, Product } from '@/lib/types';
 
 const openai = new OpenAI({
@@ -49,15 +51,19 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  // Check if user has premium access
   const dbUser = await prisma.user.findUnique({
     where: { id: user.id },
-    select: { accessTier: true }
+    select: {
+      accessTier: true,
+      subscriptionStatus: true,
+      trialEndsAt: true,
+      currentPeriodEnd: true,
+    },
   });
 
-  if (dbUser?.accessTier !== 'PREMIUM') {
+  if (!isPremiumUser(dbUser)) {
     return NextResponse.json(
-      { error: 'Premium access required for AI recommendations' },
+      { error: 'Subscription required for AI recommendations' },
       { status: 403 }
     );
   }
@@ -78,20 +84,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       .sort((a, b) => b.value - a.value)
       .slice(0, 3);
 
-    const systemPrompt = `You are an expert facial aesthetics consultant and looksmaxing advisor. You provide personalized, science-backed recommendations to improve facial aesthetics.
+    const systemPrompt = `You are an expert facial aesthetics consultant writing for Clavicular Protocol. You provide personalized, science-backed recommendations in natural prose.
 
-Your recommendations should be:
-- Specific and actionable
+Rules:
+- Specific and actionable, prioritized by impact
 - Include real products with approximate price ranges
-- Prioritized by impact
 - ${protocolType === 'softmax' ? 'Non-invasive only (no surgery, no injectables)' : 'Include all options including surgical and injectable procedures'}
+- Write explanations as 2-3 flowing sentences. No bullet lists inside explanations. Never use em dashes. Avoid stiff numbered "step 1 / step 2" language.
+- Mention timeline naturally inside the explanation (e.g. "Most people notice changes within 8-12 weeks").
 
-For each issue, provide:
-1. A clear explanation of why this affects their score
-2. A specific fix with step-by-step approach
-3. Product recommendations with real brands when possible
-4. Expected timeline for results
-5. An impact score (0.1-1.0) for how much this fix will improve their overall appearance`;
+For each issue, provide a clear issue statement, a named fix, a prose explanation, products with real brands when possible, and an impact score (0.1-1.0).`;
 
     const userPrompt = `Analyze this person's facial features and provide personalized improvement recommendations.
 
@@ -165,10 +167,12 @@ Provide 4-6 specific, personalized recommendations in this exact JSON format:
           name: p.name,
           brand: p.brand,
           price: p.price_range,
-          url: p.amazon_search_term 
-            ? `https://www.amazon.com/s?k=${encodeURIComponent(p.amazon_search_term)}`
-            : undefined,
-          imageUrl: undefined // Could integrate with Amazon Product API for images
+          url: linkForRecommendation(
+            p.name,
+            protocolType === 'hardmax' ? 'HARD' : 'SOFT',
+            p.amazon_search_term
+          ),
+          imageUrl: undefined,
         }))
       },
       impactScore: rec.impact_score

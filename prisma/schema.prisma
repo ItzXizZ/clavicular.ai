@@ -30,14 +30,44 @@ model User {
   // Access tier for gating features
   accessTier        String    @default("REGISTERED") // FREE, REGISTERED, PREMIUM
   
+  // PayPal subscription fields
+  subscriptionId       String?   @unique
+  subscriptionPlan     String?   // monthly | yearly | trial_referral
+  subscriptionStatus   String?   // TRIAL | ACTIVE | CANCELLED | SUSPENDED | EXPIRED
+  trialEndsAt          DateTime?
+  currentPeriodEnd     DateTime?
+  
   // User's data
   analysisSessions  AnalysisSession[]
   leaderboardEntry  LeaderboardEntry? // One entry per user
+  beautyChats       BeautyChat[]
+  transformations   Transformation[]
+  savedAdvice       SavedAdvice[]
+  
+  // Referral system
+  referralCode      ReferralCode?     // User's unique referral code
+  referredBy        Referral?         @relation("ReferredUser") // Who referred this user
+  referrals         Referral[]        @relation("ReferrerUser") // Users this user referred
   
   // Timestamps
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
   lastLoginAt       DateTime?
+}
+
+// Persisted protocol / physique / fashion guidance for premium users
+model SavedAdvice {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // softmax | hardmax | physique | fashion
+  type      String
+  payload   String   // JSON blob
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, type])
+  @@index([userId])
 }
 
 // =====================================================
@@ -128,7 +158,41 @@ model AnalysisSession {
   features        String   // JSON stored as string
   recommendations String?  // JSON stored as string
   profileMode     String   // front, side
+  
+  // AI before/after transformation cache
+  beforeImageUrl  String?
+  afterImageUrl   String?
+  afterPrompt     String?
+  afterGeneratedAt DateTime?
+  
+  transformations Transformation[]
+  
   createdAt       DateTime @default(now())
+}
+
+// History of AI face transformations (subscription value)
+model Transformation {
+  id                String   @id @default(cuid())
+  userId            String?
+  user              User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  analysisSessionId String?
+  analysisSession   AnalysisSession? @relation(fields: [analysisSessionId], references: [id], onDelete: SetNull)
+  beforeImageUrl    String
+  afterImageUrl     String
+  afterPrompt       String?
+  source            String   @default("protocol") // protocol | beauty_bot | rescan
+  createdAt         DateTime @default(now())
+}
+
+// Beauty chatbot conversations for subscribed users
+model BeautyChat {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String?
+  messages  String   // JSON array of { role, content, imageUrl? }
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // Public leaderboard entries - one per user
@@ -173,6 +237,56 @@ model ShareLink {
   
   // Expiration - 24 hours from creation
   expiresAt       DateTime
+  
+  // Timestamps
+  createdAt       DateTime @default(now())
+}
+
+// =====================================================
+// REFERRAL SYSTEM
+// =====================================================
+
+// Unique referral code for each user
+model ReferralCode {
+  id              String   @id @default(cuid())
+  
+  // The unique code (e.g., "JOHN123" or auto-generated)
+  code            String   @unique
+  
+  // Owner of this referral code
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Referrals made with this code
+  referrals       Referral[]
+  
+  // Stats
+  usageCount      Int      @default(0)
+  
+  // Timestamps
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// Track referrals between users
+model Referral {
+  id              String   @id @default(cuid())
+  
+  // The referral code used
+  referralCodeId  String
+  referralCode    ReferralCode @relation(fields: [referralCodeId], references: [id], onDelete: Cascade)
+  
+  // The user who made the referral (code owner)
+  referrerId      String
+  referrer        User     @relation("ReferrerUser", fields: [referrerId], references: [id], onDelete: Cascade)
+  
+  // The user who was referred (signed up with the code)
+  referredUserId  String   @unique
+  referredUser    User     @relation("ReferredUser", fields: [referredUserId], references: [id], onDelete: Cascade)
+  
+  // Reward status
+  rewardGranted   Boolean  @default(false)
+  rewardGrantedAt DateTime?
   
   // Timestamps
   createdAt       DateTime @default(now())

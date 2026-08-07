@@ -1,16 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { verifyAuth } from '@/lib/authMiddleware';
+import { getPayPalSubscription, resolvePlanFromId } from '@/lib/paypal';
+import { subscriptionActivationData } from '@/lib/subscription';
 
 interface PaymentVerifyRequest {
-  paymentId: string;
-  feature?: 'flaws' | 'protocol' | 'premium';
+  subscriptionId: string;
+  plan?: 'monthly' | 'yearly';
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  // Verify authentication
   const { user, error } = await verifyAuth(request);
-  
+
   if (!user) {
     return NextResponse.json(
       { error: error || 'Authentication required' },
@@ -20,31 +21,46 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   try {
     const body: PaymentVerifyRequest = await request.json();
-    const { paymentId, feature = 'premium' } = body;
+    const { subscriptionId, plan: requestedPlan } = body;
 
-    if (!paymentId) {
+    if (!subscriptionId) {
       return NextResponse.json(
-        { error: 'Payment ID is required' },
+        { error: 'Subscription ID is required' },
         { status: 400 }
       );
     }
 
-    // TODO: In production, verify the payment with PayPal API
-    // For now, we'll trust the payment ID and upgrade the user
-    // 
-    // const paypalVerification = await verifyPayPalPayment(paymentId);
-    // if (!paypalVerification.valid) {
-    //   return NextResponse.json({ error: 'Invalid payment' }, { status: 400 });
-    // }
+    console.log(`[Payment] Verifying subscription ${subscriptionId} for user ${user.id}`);
 
-    console.log(`[Payment] Processing payment ${paymentId} for user ${user.id}, feature: ${feature}`);
+    const paypalSub = await getPayPalSubscription(subscriptionId);
+    const plan =
+      requestedPlan ||
+      resolvePlanFromId(paypalSub?.plan_id) ||
+      'monthly';
 
-    // Update user's access tier to PREMIUM
+    // Accept APPROVAL_PENDING / APPROVED / ACTIVE — trial starts immediately
+    const status = paypalSub?.status || 'ACTIVE';
+    const validStatuses = ['APPROVAL_PENDING', 'APPROVED', 'ACTIVE'];
+    if (paypalSub && !validStatuses.includes(status)) {
+      return NextResponse.json(
+        { error: `Subscription not active (status: ${status})` },
+        { status: 400 }
+      );
+    }
+
+    // If PayPal credentials missing, still activate from client approval (dev fallback)
+    if (!paypalSub) {
+      console.warn('[Payment] Could not verify with PayPal API — activating from client approval');
+    }
+
+    const activation = subscriptionActivationData(plan, status);
+
     const updatedUser = await prisma.user.update({
       where: { id: user.id },
-      data: { 
-        accessTier: 'PREMIUM',
-        updatedAt: new Date()
+      data: {
+        subscriptionId,
+        ...activation,
+        updatedAt: new Date(),
       },
       select: {
         id: true,
@@ -52,24 +68,29 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         name: true,
         displayName: true,
         accessTier: true,
+        subscriptionId: true,
+        subscriptionPlan: true,
+        subscriptionStatus: true,
+        trialEndsAt: true,
+        currentPeriodEnd: true,
         leaderboardEntry: {
           select: {
             id: true,
             overallScore: true,
             hidden: true,
             age: true,
-            name: true
-          }
-        }
-      }
+            name: true,
+          },
+        },
+      },
     });
 
-    console.log(`[Payment] User ${user.id} upgraded to PREMIUM`);
+    console.log(`[Payment] User ${user.id} subscribed (${plan}, ${activation.subscriptionStatus})`);
 
-    return NextResponse.json({ 
-      success: true, 
+    return NextResponse.json({
+      success: true,
       user: updatedUser,
-      message: 'Premium access granted!'
+      message: 'Subscription activated. Your 7-day free trial has started!',
     });
   } catch (err) {
     console.error('Payment verification error:', err);
@@ -79,40 +100,3 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 }
-
-// Helper function to verify PayPal payment (implement in production)
-// async function verifyPayPalPayment(paymentId: string): Promise<{ valid: boolean; amount?: number }> {
-//   const PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID;
-//   const PAYPAL_SECRET = process.env.PAYPAL_SECRET;
-//   const PAYPAL_API_URL = process.env.NODE_ENV === 'production' 
-//     ? 'https://api-m.paypal.com' 
-//     : 'https://api-m.sandbox.paypal.com';
-//
-//   // Get access token
-//   const auth = Buffer.from(`${PAYPAL_CLIENT_ID}:${PAYPAL_SECRET}`).toString('base64');
-//   const tokenResponse = await fetch(`${PAYPAL_API_URL}/v1/oauth2/token`, {
-//     method: 'POST',
-//     headers: {
-//       'Authorization': `Basic ${auth}`,
-//       'Content-Type': 'application/x-www-form-urlencoded'
-//     },
-//     body: 'grant_type=client_credentials'
-//   });
-//   
-//   const { access_token } = await tokenResponse.json();
-//
-//   // Verify payment
-//   const paymentResponse = await fetch(`${PAYPAL_API_URL}/v2/checkout/orders/${paymentId}`, {
-//     headers: {
-//       'Authorization': `Bearer ${access_token}`,
-//       'Content-Type': 'application/json'
-//     }
-//   });
-//
-//   const payment = await paymentResponse.json();
-//   return { 
-//     valid: payment.status === 'COMPLETED',
-//     amount: parseFloat(payment.purchase_units?.[0]?.amount?.value || '0')
-//   };
-// }
-

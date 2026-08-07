@@ -56,74 +56,163 @@ export default function CameraCapture({ onCapture, flashlightOn = false, onFlash
     };
   }, []);
 
-  // Initialize camera
-  const startCamera = useCallback(async (facing: 'user' | 'environment') => {
-    // Stop existing stream
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-    }
-
-    // Try different constraint options in order of preference
-    const constraintOptions = [
-      {
-        video: {
-          facingMode: facing,
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        }
-      },
-      {
-        video: {
-          facingMode: facing,
-          width: { ideal: 640 },
-          height: { ideal: 480 }
-        }
-      },
-      {
-        video: {
-          facingMode: facing
-        }
-      },
-      {
-        video: true
-      }
-    ];
-
-    for (const constraints of constraintOptions) {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia(constraints);
-        streamRef.current = stream;
-
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.onloadedmetadata = () => {
-            videoRef.current?.play().catch(console.error);
-            setIsReady(true);
-          };
-        }
-        setHasCamera(true);
-        setError(null);
-        return; // Success, exit the loop
-      } catch (err) {
-        console.error('Camera attempt failed:', err);
-        // Continue to next constraint option
-      }
-    }
-
-    // All attempts failed
-    setError('Camera in use by another app. Close other apps using your camera and refresh.');
-    setHasCamera(false);
+  const stopStream = useCallback((stream: MediaStream | null) => {
+    if (!stream) return;
+    stream.getTracks().forEach((track) => track.stop());
   }, []);
 
+  // Initialize camera — guarded against React Strict Mode remount races
   useEffect(() => {
-    startCamera(facingMode);
+    let cancelled = false;
+    let localStream: MediaStream | null = null;
 
-    return () => {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
+    const attachStream = async (stream: MediaStream) => {
+      localStream = stream;
+      streamRef.current = stream;
+
+      const video = videoRef.current;
+      if (!video) return;
+
+      video.srcObject = stream;
+      try {
+        await video.play();
+      } catch (playErr) {
+        // Autoplay can reject briefly during remount; metadata path usually recovers
+        console.warn('[CameraCapture] video.play() deferred:', playErr);
+      }
+      if (!cancelled) {
+        setIsReady(true);
+        setHasCamera(true);
+        setError(null);
       }
     };
-  }, [facingMode, startCamera]);
+
+    const cameraErrorMessage = (err: unknown) => {
+      const name = err instanceof DOMException ? err.name : '';
+      if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+        return 'Camera permission denied. Allow camera access in your browser settings and refresh.';
+      }
+      if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+        return 'No camera found. Connect a camera and refresh.';
+      }
+      if (name === 'NotReadableError' || name === 'TrackStartError') {
+        return 'Camera is busy. Close other apps using it, then refresh.';
+      }
+      if (name === 'SecurityError') {
+        return 'Camera blocked on this page. Use https or localhost.';
+      }
+      return 'Could not start camera. Check permissions and try again.';
+    };
+
+    const startCamera = async () => {
+      setIsReady(false);
+
+      // Release any prior stream and give the OS a beat to free the device
+      // (Next.js Strict Mode mounts → cleanup → remounts immediately)
+      if (streamRef.current) {
+        stopStream(streamRef.current);
+        streamRef.current = null;
+      }
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
+      await new Promise((r) => setTimeout(r, 150));
+      if (cancelled) return;
+
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setError('Camera not supported in this browser.');
+        setHasCamera(false);
+        return;
+      }
+
+      const constraintOptions: MediaStreamConstraints[] = [
+        {
+          video: {
+            facingMode: { ideal: facingMode },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+        },
+        {
+          video: {
+            facingMode: { ideal: facingMode },
+            width: { ideal: 640 },
+            height: { ideal: 480 },
+          },
+        },
+        { video: { facingMode: { ideal: facingMode } } },
+        { video: true },
+      ];
+
+      let lastError: unknown = null;
+
+      for (const constraints of constraintOptions) {
+        if (cancelled) return;
+        const maxAttempts = 2;
+
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+          if (cancelled) return;
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            if (cancelled) {
+              stopStream(stream);
+              return;
+            }
+            await attachStream(stream);
+            return;
+          } catch (err) {
+            lastError = err;
+            console.error('[CameraCapture] Camera attempt failed:', err);
+            const name = err instanceof DOMException ? err.name : '';
+
+            // Permission / missing device — no point trying more constraints
+            if (
+              name === 'NotAllowedError' ||
+              name === 'PermissionDeniedError' ||
+              name === 'NotFoundError' ||
+              name === 'DevicesNotFoundError' ||
+              name === 'SecurityError'
+            ) {
+              if (!cancelled) {
+                setError(cameraErrorMessage(err));
+                setHasCamera(false);
+              }
+              return;
+            }
+
+            // Device still releasing after Strict Mode remount — brief retry
+            if (
+              (name === 'NotReadableError' || name === 'TrackStartError') &&
+              attempt < maxAttempts - 1
+            ) {
+              await new Promise((r) => setTimeout(r, 350));
+              continue;
+            }
+
+            // Overconstrained → try looser constraints; otherwise move on
+            break;
+          }
+        }
+      }
+
+      if (!cancelled) {
+        setError(cameraErrorMessage(lastError));
+        setHasCamera(false);
+      }
+    };
+
+    startCamera();
+
+    return () => {
+      cancelled = true;
+      stopStream(localStream);
+      stopStream(streamRef.current);
+      streamRef.current = null;
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
+    };
+  }, [facingMode, stopStream]);
 
 
   const captureImage = useCallback(async () => {

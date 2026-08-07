@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { authFetch } from '@/lib/apiClient';
-import { NativeAdCard } from '@/components/AdBanner';
+import TransformPitchModal from '@/components/TransformPitchModal';
 
 interface LeaderboardEntry {
   id: string;
@@ -18,11 +18,13 @@ interface LeaderboardEntry {
   rarity: string;
   features: string;
   createdAt: string;
+  isPremium?: boolean;
 }
 
 interface LeaderboardProps {
   isOpen: boolean;
   onClose: () => void;
+  onTransformCta?: () => void;
 }
 
 const getRankBadge = (rank: number) => {
@@ -61,16 +63,20 @@ const getScoreColor = (score: number) => {
   return '#ef4444';
 };
 
-export default function Leaderboard({ isOpen, onClose }: LeaderboardProps) {
+export default function Leaderboard({ isOpen, onClose, onTransformCta }: LeaderboardProps) {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedEntry, setSelectedEntry] = useState<LeaderboardEntry | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showTransformPitch, setShowTransformPitch] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       fetchLeaderboard();
+      setShowTransformPitch(false);
+      return;
     }
+
+    setShowTransformPitch(false);
   }, [isOpen]);
 
   const fetchLeaderboard = async () => {
@@ -90,14 +96,6 @@ export default function Leaderboard({ isOpen, onClose }: LeaderboardProps) {
       console.error(err);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const parseFeatures = (featuresJson: string) => {
-    try {
-      return JSON.parse(featuresJson);
-    } catch {
-      return [];
     }
   };
 
@@ -183,176 +181,89 @@ export default function Leaderboard({ isOpen, onClose }: LeaderboardProps) {
                   </svg>
                 </div>
                 <p className="text-zinc-500 text-lg mb-2">No entries yet</p>
-                <p className="text-zinc-600 text-sm">Be the first to join the leaderboard!</p>
+                <p className="text-zinc-600 text-sm mb-4">Be the first to join the leaderboard!</p>
+                <a
+                  href="/"
+                  className="inline-block px-5 py-2.5 bg-gradient-to-r from-[#22c55e] to-[#16a34a] text-white text-xs font-bold uppercase tracking-wide rounded-xl"
+                >
+                  TO COMPLETELY TRANSFORM YOUR FACE
+                </a>
               </div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-5 pt-3 px-1">
-                {entries.map((entry, index) => {
-                  // Insert native ad after position 5 and 15 (less intrusive)
-                  const showAdAfter = index === 4 || index === 14;
-                  
-                  return (
-                    <React.Fragment key={entry.id}>
-                      <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: index * 0.05 }}
-                        onClick={() => setSelectedEntry(entry)}
-                        className="relative group cursor-pointer overflow-visible"
+                {entries.map((entry, index) => (
+                  <motion.div
+                    key={entry.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                    onClick={() => {
+                      // User-initiated: open pitch and keep it until they dismiss or continue.
+                      setShowTransformPitch(true);
+                    }}
+                    className="relative group cursor-pointer overflow-visible"
+                  >
+                    {getRankBadge(index + 1)}
+                    {entry.isPremium && (
+                      <div
+                        className="absolute -top-2 -right-2 w-7 h-7 bg-[#22c55e] rounded-full flex items-center justify-center shadow-lg shadow-green-500/30 z-10"
+                        title="Premium member"
                       >
-                        {getRankBadge(index + 1)}
-                        <div className={`aspect-[3/4] rounded-2xl overflow-hidden bg-zinc-900 border transition-all duration-300 ${
-                          index === 0 ? 'border-[#22c55e]/50 shadow-lg shadow-green-500/10' :
-                          index === 1 ? 'border-slate-400/30' :
-                          index === 2 ? 'border-zinc-500/30' :
-                          'border-zinc-800 group-hover:border-zinc-600'
-                        }`}>
-                          {/* Image */}
-                          <div className="relative w-full h-full">
-                            <img
-                              src={entry.imageUrl}
-                              alt={entry.name}
-                              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                            />
-                            {/* Gradient overlay */}
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
-                            
-                            {/* Info overlay */}
-                            <div className="absolute bottom-0 left-0 right-0 p-3">
-                              <div className="flex items-end justify-between gap-2">
-                                <div className="min-w-0">
-                                  <p className="text-white font-semibold text-sm truncate">{entry.name}</p>
-                                  <p className="text-zinc-400 text-xs">{entry.age} years</p>
-                                </div>
-                                <div className="flex-shrink-0 text-right">
-                                  <span
-                                    className="text-lg font-bold"
-                                    style={{ color: getScoreColor(entry.overallScore) }}
-                                  >
-                                    {entry.overallScore.toFixed(1)}
-                                  </span>
-                                  <span className="text-zinc-500 text-xs block">/10</span>
-                                </div>
-                              </div>
+                        <svg className="w-4 h-4 text-black" fill="currentColor" viewBox="0 0 20 20">
+                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.286 3.958a1 1 0 00.95.69h4.162c.969 0 1.371 1.24.588 1.81l-3.368 2.447a1 1 0 00-.363 1.118l1.287 3.957c.3.922-.755 1.688-1.538 1.118l-3.367-2.446a1 1 0 00-1.176 0l-3.367 2.446c-.783.57-1.838-.196-1.538-1.118l1.287-3.957a1 1 0 00-.364-1.118L2.063 9.385c-.783-.57-.38-1.81.588-1.81h4.163a1 1 0 00.95-.69l1.285-3.958z" />
+                        </svg>
+                      </div>
+                    )}
+                    <div className={`aspect-[3/4] rounded-2xl overflow-hidden bg-zinc-900 border transition-all duration-300 ${
+                      index === 0 ? 'border-[#22c55e]/50 shadow-lg shadow-green-500/10' :
+                      index === 1 ? 'border-slate-400/30' :
+                      index === 2 ? 'border-zinc-500/30' :
+                      'border-zinc-800 group-hover:border-zinc-600'
+                    }`}>
+                      {/* Image */}
+                      <div className="relative w-full h-full">
+                        <img
+                          src={entry.imageUrl}
+                          alt={entry.name}
+                          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                        />
+                        {/* Gradient overlay */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
+                        
+                        {/* Info overlay */}
+                        <div className="absolute bottom-0 left-0 right-0 p-3">
+                          <div className="flex items-end justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="text-white font-semibold text-sm truncate">{entry.name}</p>
+                              <p className="text-zinc-400 text-xs">{entry.age} years</p>
+                            </div>
+                            <div className="flex-shrink-0 text-right">
+                              <span
+                                className="text-lg font-bold"
+                                style={{ color: getScoreColor(entry.overallScore) }}
+                              >
+                                {entry.overallScore.toFixed(1)}
+                              </span>
+                              <span className="text-zinc-500 text-xs block">/10</span>
                             </div>
                           </div>
                         </div>
-                      </motion.div>
-                      
-                      {/* Native ad card - blends with leaderboard entries */}
-                      {showAdAfter && (
-                        <NativeAdCard 
-                          slot={`leaderboard-native-${index}`}
-                        />
-                      )}
-                    </React.Fragment>
-                  );
-                })}
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
               </div>
             )}
           </div>
 
-          {/* Entry detail modal */}
-          <AnimatePresence>
-            {selectedEntry && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
-                onClick={() => setSelectedEntry(null)}
-              >
-                <motion.div
-                  initial={{ scale: 0.9, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.9, opacity: 0 }}
-                  onClick={(e) => e.stopPropagation()}
-                  className="w-full max-w-lg bg-black rounded-2xl border border-zinc-800 overflow-hidden shadow-2xl"
-                >
-                  {/* Image section */}
-                  <div className="relative aspect-square bg-black">
-                    <img
-                      src={selectedEntry.imageUrl}
-                      alt={selectedEntry.name}
-                      className="w-full h-full object-cover"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent" />
-                    
-                    {/* Close button */}
-                    <button
-                      onClick={() => setSelectedEntry(null)}
-                      className="absolute top-4 right-4 w-10 h-10 bg-black/50 backdrop-blur-sm rounded-full flex items-center justify-center text-white hover:bg-black/70 transition-colors"
-                    >
-                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-
-                    {/* Score overlay */}
-                    <div className="absolute bottom-4 left-4 right-4">
-                      <div className="flex items-end justify-between">
-                        <div>
-                          <h3 className="text-2xl font-bold text-white">{selectedEntry.name}</h3>
-                          <p className="text-zinc-400">{selectedEntry.age} years old</p>
-                        </div>
-                        <div className="text-right">
-                          <span
-                            className="text-4xl font-bold"
-                            style={{ color: getScoreColor(selectedEntry.overallScore) }}
-                          >
-                            {selectedEntry.overallScore.toFixed(1)}
-                          </span>
-                          <span className="text-zinc-500 text-lg">/10</span>
-                          <p className="text-[#22c55e] text-sm">{selectedEntry.rarity}</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Stats section */}
-                  <div className="p-6">
-                    {/* Category scores */}
-                    <div className="grid grid-cols-4 gap-3 mb-6">
-                      <div className="text-center p-3 bg-zinc-900 border border-zinc-800 rounded-xl">
-                        <p className="text-xs text-zinc-500 mb-1">Harmony</p>
-                        <p className="text-lg font-semibold text-white">{selectedEntry.harmScore.toFixed(1)}</p>
-                      </div>
-                      <div className="text-center p-3 bg-zinc-900 border border-zinc-800 rounded-xl">
-                        <p className="text-xs text-zinc-500 mb-1">Angular</p>
-                        <p className="text-lg font-semibold text-white">{selectedEntry.anguScore.toFixed(1)}</p>
-                      </div>
-                      <div className="text-center p-3 bg-zinc-900 border border-zinc-800 rounded-xl">
-                        <p className="text-xs text-zinc-500 mb-1">Dimorphism</p>
-                        <p className="text-lg font-semibold text-white">{selectedEntry.dimoScore.toFixed(1)}</p>
-                      </div>
-                      <div className="text-center p-3 bg-zinc-900 border border-zinc-800 rounded-xl">
-                        <p className="text-xs text-zinc-500 mb-1">Misc</p>
-                        <p className="text-lg font-semibold text-white">{selectedEntry.miscScore.toFixed(1)}</p>
-                      </div>
-                    </div>
-
-                    {/* Top features */}
-                    <div>
-                      <h4 className="text-sm font-medium text-zinc-400 mb-3">Top Features</h4>
-                      <div className="space-y-2">
-                        {parseFeatures(selectedEntry.features).sort((a: { value: number }, b: { value: number }) => b.value - a.value).slice(0, 4).map((feature: { name: string; value: number; isStrength: boolean }, idx: number) => (
-                          <div key={idx} className="flex items-center justify-between p-2 bg-zinc-900 border border-zinc-800 rounded-lg">
-                            <span className="text-sm text-zinc-300">{feature.name}</span>
-                            <span
-                              className="text-sm font-medium"
-                              style={{ color: feature.value >= 5 ? '#22c55e' : '#ef4444' }}
-                            >
-                              {feature.value.toFixed(1)}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </motion.div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          <TransformPitchModal
+            isOpen={showTransformPitch}
+            onClose={() => setShowTransformPitch(false)}
+            onCta={() => {
+              setShowTransformPitch(false);
+              onTransformCta?.();
+            }}
+          />
         </motion.div>
       )}
     </AnimatePresence>

@@ -236,8 +236,8 @@ function getFallbackProtocol(flaw: AnalysisResult['features'][0]): ProtocolRecom
         title: 'Mewing + Chewing Protocol',
         explanation: 'Proper tongue posture combined with resistance chewing can strengthen masseter muscles and improve jaw definition over 6-12 months.',
         products: [
-          { id: 'mastic', name: 'Mastic Gum', price: '$15-30', brand: 'Chios Mastiha', imageUrl: 'https://m.media-amazon.com/images/I/71kJQGLXhAL._AC_SL1500_.jpg', url: 'https://www.amazon.com/dp/B07NQHQ4CC' },
-          { id: 'falim', name: 'Falim Gum', price: '$10-15', brand: 'Falim', imageUrl: 'https://m.media-amazon.com/images/I/61LKzSXh-lL._AC_SL1500_.jpg', url: 'https://www.amazon.com/dp/B07BF71F5N' }
+          { id: 'mastic', name: 'Mastic Gum', price: '$15-30', brand: 'Chios Mastiha', imageUrl: 'https://m.media-amazon.com/images/I/71kJQGLXhAL._AC_SL1500_.jpg', url: 'https://www.amazon.com/s?k=chios+mastic+gum' },
+          { id: 'falim', name: 'Falim Gum', price: '$10-15', brand: 'Falim', imageUrl: 'https://m.media-amazon.com/images/I/61LKzSXh-lL._AC_SL1500_.jpg', url: 'https://www.amazon.com/s?k=falim+gum' }
         ]
       },
       impactScore: 0.4
@@ -248,8 +248,8 @@ function getFallbackProtocol(flaw: AnalysisResult['features'][0]): ProtocolRecom
         title: 'Leanmaxxing Protocol',
         explanation: 'Reducing body fat to 10-14% reveals bone structure and improves facial definition. Creates dramatic improvements in FWHR appearance.',
         products: [
-          { id: 'scale', name: 'Food Scale', price: '$15-25', brand: 'OXO', imageUrl: 'https://m.media-amazon.com/images/I/71Zcl-J7oPL._AC_SL1500_.jpg', url: 'https://www.amazon.com/dp/B079D9B82W' },
-          { id: 'myfitnesspal', name: 'MyFitnessPal Premium', price: '$20/month', brand: 'MyFitnessPal', imageUrl: 'https://play-lh.googleusercontent.com/YKNhq0Cbo_tPnNSqVKZmPJNkLUwcIvHgZR3_X_d9qVoALl-IQXXI9dCEdwcXQVAF7Pmc=w480-h960-rw' }
+          { id: 'scale', name: 'Food Scale', price: '$15-25', brand: 'OXO', imageUrl: 'https://m.media-amazon.com/images/I/71Zcl-J7oPL._AC_SL1500_.jpg', url: 'https://www.amazon.com/s?k=oxo+food+scale' },
+          { id: 'myfitnesspal', name: 'MyFitnessPal Premium', price: '$20/month', brand: 'MyFitnessPal', url: 'https://www.myfitnesspal.com/' }
         ]
       },
       impactScore: 0.6
@@ -260,8 +260,8 @@ function getFallbackProtocol(flaw: AnalysisResult['features'][0]): ProtocolRecom
         title: 'Jaw Angle Enhancement',
         explanation: 'Strategic approaches including masseter training and posture optimization to create sharper gonial angle appearance.',
         products: [
-          { id: 'chisell', name: 'Chisell Jaw Exerciser', price: '$25-40', brand: 'Chisell', imageUrl: 'https://m.media-amazon.com/images/I/61LN5lPvX+L._AC_SL1500_.jpg', url: 'https://www.amazon.com/dp/B07WW1WNCX' },
-          { id: 'jawzrsize', name: 'Jawzrsize', price: '$30-50', brand: 'Jawzrsize', imageUrl: 'https://m.media-amazon.com/images/I/71C-EEkfT4L._AC_SL1500_.jpg', url: 'https://www.amazon.com/dp/B07DGV1T4G' }
+          { id: 'jawliner', name: 'Jawliner Fitness Gum', price: '$30-65', brand: 'Jawliner', url: 'https://www.jawliner.com/' },
+          { id: 'mastic2', name: 'Mastic Gum', price: '$15-30', brand: 'Chios Mastiha', url: 'https://www.amazon.com/s?k=chios+mastic+gum' }
         ]
       },
       impactScore: 0.5
@@ -272,8 +272,8 @@ function getFallbackProtocol(flaw: AnalysisResult['features'][0]): ProtocolRecom
         title: 'Eye Area Optimization',
         explanation: 'While bone structure is genetic, reducing periorbital puffiness and optimizing skincare can enhance eye area appearance.',
         products: [
-          { id: 'caffeine', name: 'Caffeine Eye Serum', price: '$8-15', brand: 'The Ordinary', imageUrl: 'https://m.media-amazon.com/images/I/61fJkgKeCdL._SL1500_.jpg', url: 'https://www.amazon.com/dp/B072XJQWNW' },
-          { id: 'retinol', name: 'Retinol Eye Cream', price: '$20-40', brand: 'CeraVe', imageUrl: 'https://m.media-amazon.com/images/I/51JJ7ooAr9L._SL1500_.jpg', url: 'https://www.amazon.com/dp/B08HNMF9GZ' }
+          { id: 'caffeine', name: 'Caffeine Eye Serum', price: '$8-15', brand: 'The Ordinary', url: 'https://theordinary.com/en-us/caffeine-solution-5-egcg-serum-100425.html' },
+          { id: 'retinol', name: 'Retinol Serum', price: '$20-40', brand: 'CeraVe', url: 'https://www.cerave.com/skincare/moisturizers/skin-renewing-retinol-serum' }
         ]
       },
       impactScore: 0.3

@@ -60,6 +60,7 @@ export default function UserMenu() {
   const [isOpen, setIsOpen] = useState(false);
   const [isToggling, setIsToggling] = useState(false);
   const [isHidden, setIsHidden] = useState(false);
+  const [copied, setCopied] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Sync hidden state with dbUser
@@ -111,6 +112,22 @@ export default function UserMenu() {
       console.error('Error toggling leaderboard visibility:', error);
     } finally {
       setIsToggling(false);
+    }
+  };
+
+  // Copy referral link to clipboard
+  const handleCopyReferralLink = async () => {
+    if (!dbUser?.referralCode) return;
+    
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
+    const link = `${baseUrl}?ref=${dbUser.referralCode}`;
+    
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
     }
   };
 
@@ -185,6 +202,52 @@ export default function UserMenu() {
                   <span className="text-xs font-medium">
                     Score: {dbUser.leaderboardEntry.overallScore.toFixed(1)}/10
                   </span>
+                </div>
+              </div>
+            )}
+
+            {/* Referral section */}
+            {dbUser?.referralCode && (
+              <div className="px-4 py-3 border-b border-zinc-800 bg-gradient-to-r from-[#22c55e]/5 to-emerald-500/5">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2 text-[#22c55e]">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
+                    </svg>
+                    <span className="text-xs font-medium">Invite Friends</span>
+                  </div>
+                  {dbUser.referralCount > 0 && (
+                    <span className="text-xs text-zinc-500">
+                      {dbUser.referralCount} referral{dbUser.referralCount !== 1 ? 's' : ''}
+                    </span>
+                  )}
+                </div>
+                <p className="text-[10px] text-zinc-500 mb-2">
+                  Friends who sign up with your code get a free 7-day trial!
+                </p>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 bg-zinc-900 rounded-lg px-3 py-1.5 border border-zinc-700">
+                    <span className="text-xs font-mono text-white">{dbUser.referralCode}</span>
+                  </div>
+                  <button
+                    onClick={handleCopyReferralLink}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                      copied 
+                        ? 'bg-[#22c55e] text-white' 
+                        : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                    }`}
+                  >
+                    {copied ? (
+                      <span className="flex items-center gap-1">
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        Copied!
+                      </span>
+                    ) : (
+                      'Copy Link'
+                    )}
+                  </button>
                 </div>
               </div>
             )}
