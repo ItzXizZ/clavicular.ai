@@ -5,6 +5,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/lib/useAuth';
 import { signOut } from '@/lib/auth';
 import { authFetch } from '@/lib/apiClient';
+import { isPremiumUser, SUBSCRIPTION_PRICING } from '@/lib/subscription';
+
+interface UserMenuProps {
+  onUpgrade?: () => void;
+}
 
 // Generate a unique color based on a string (name/email)
 function stringToColor(str: string): string {
@@ -55,13 +60,14 @@ function DefaultAvatar({ name, size = 'md' }: DefaultAvatarProps) {
   );
 }
 
-export default function UserMenu() {
+export default function UserMenu({ onUpgrade }: UserMenuProps) {
   const { user, dbUser, isAuthenticated, isLoading, refreshDbUser } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [isToggling, setIsToggling] = useState(false);
   const [isHidden, setIsHidden] = useState(false);
   const [copied, setCopied] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const isPremium = isPremiumUser(dbUser);
 
   // Sync hidden state with dbUser
   useEffect(() => {
@@ -203,6 +209,31 @@ export default function UserMenu() {
                     Score: {dbUser.leaderboardEntry.overallScore.toFixed(1)}/10
                   </span>
                 </div>
+              </div>
+            )}
+
+            {/* Premium upsell */}
+            {!isPremium && onUpgrade && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsOpen(false);
+                  onUpgrade();
+                }}
+                className="w-full px-4 py-3 border-b border-zinc-800 bg-[#22c55e]/10 hover:bg-[#22c55e]/15 transition-colors text-left"
+              >
+                <p className="text-xs font-bold text-[#22c55e]">
+                  Unlock Premium · {SUBSCRIPTION_PRICING.trialDays}-day free trial
+                </p>
+                <p className="text-[10px] text-white/45 mt-0.5">
+                  Protocol, AI after, fashion & physique · {SUBSCRIPTION_PRICING.yearly.label}
+                </p>
+              </button>
+            )}
+
+            {isPremium && (
+              <div className="px-4 py-2 border-b border-zinc-800 bg-[#22c55e]/10">
+                <p className="text-xs font-semibold text-[#22c55e]">Premium active</p>
               </div>
             )}
 

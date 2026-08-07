@@ -7,18 +7,21 @@ interface TransformPitchModalProps {
   isOpen: boolean;
   onClose: () => void;
   onCta: () => void;
+  /** Softer dismiss label when used as a recurring leaderboard pitch */
+  dismissLabel?: string;
 }
 
 const POINTS = [
-  'AI visions of your future face before you commit to anything',
-  'Personalized Softmax + Hardmax protocol, style & makeup picks',
-  'Top surgical recommendations matched to your exact face shape',
+  'AI before/after of your future face',
+  'Softmax + Hardmax protocol built for your scan',
+  'Fashion, physique, skincare & Beauty Bot',
 ];
 
 export default function TransformPitchModal({
   isOpen,
   onClose,
   onCta,
+  dismissLabel = 'Not now',
 }: TransformPitchModalProps) {
   return (
     <AnimatePresence>
@@ -27,15 +30,21 @@ export default function TransformPitchModal({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm"
+          className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/85 backdrop-blur-sm"
+          onClick={onClose}
         >
           <motion.div
-            initial={{ opacity: 0, scale: 0.94, y: 16 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.96, y: 12 }}
+            initial={{ opacity: 0, y: 40, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 24, scale: 0.98 }}
             transition={{ type: 'spring', stiffness: 320, damping: 28 }}
-            className="w-full max-w-md bg-black border border-white/15 rounded-2xl overflow-hidden shadow-2xl"
+            className="w-full max-w-md bg-black border border-white/15 rounded-t-2xl sm:rounded-2xl overflow-hidden shadow-2xl max-h-[92vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
           >
+            <div className="sm:hidden flex justify-center pt-2 pb-1">
+              <span className="w-10 h-1 rounded-full bg-white/20" />
+            </div>
+
             <div className="relative">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
@@ -59,26 +68,29 @@ export default function TransformPitchModal({
                   Before
                 </span>
                 <span className="px-2 py-1 rounded bg-[#22c55e] text-[10px] font-bold text-black uppercase tracking-wide ml-auto">
-                  After
+                  After · Premium
                 </span>
               </div>
             </div>
 
             <div className="p-5 space-y-4">
-              <div>
+              <div className="text-center sm:text-left">
+                <p className="text-[10px] uppercase tracking-[0.18em] text-[#22c55e] font-semibold mb-1.5">
+                  Clavicular Premium
+                </p>
                 <h3 className="text-xl font-bold text-white leading-tight">
                   Completely transform yourself
                 </h3>
                 <p className="text-sm text-white/55 mt-2 leading-snug">
-                  The world&apos;s most comprehensive full protocol. Softmax, Hardmax,
-                  fashion, physique, skincare, and AI before/after in one system.
+                  Softmax, Hardmax, fashion, physique, and AI future-self — the full protocol after
+                  your free scan.
                 </p>
               </div>
 
               <ul className="space-y-2">
                 {POINTS.map((point) => (
                   <li key={point} className="flex items-start gap-2.5 text-[13px] text-white/80">
-                    <span className="text-[#22c55e] font-bold mt-0.5">✓</span>
+                    <span className="text-[#22c55e] font-bold mt-0.5 shrink-0">✓</span>
                     <span>{point}</span>
                   </li>
                 ))}
@@ -89,9 +101,16 @@ export default function TransformPitchModal({
                 onClick={onCta}
                 className="w-full py-3.5 bg-[#22c55e] hover:bg-white text-black text-sm font-bold rounded-xl transition-colors"
               >
-                Start 7-day free trial
+                Start {SUBSCRIPTION_PRICING.trialDays}-day free trial
               </button>
-              <p className="text-center text-[11px] text-white/40">
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-full py-2 text-[12px] text-white/40 hover:text-white/70 transition-colors"
+              >
+                {dismissLabel}
+              </button>
+              <p className="text-center text-[11px] text-white/40 pb-1">
                 Yearly includes trial · then {SUBSCRIPTION_PRICING.yearly.label} · or{' '}
                 {SUBSCRIPTION_PRICING.monthly.label}
               </p>

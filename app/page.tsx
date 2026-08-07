@@ -502,13 +502,13 @@ export default function Home() {
     <main
       className={`bg-black ${
         viewMode === 'results'
-          ? 'fixed inset-0 overflow-hidden'
+          ? 'fixed inset-0 overflow-hidden overscroll-none'
           : 'relative min-h-screen'
       }`}
     >
       {/* User Menu - Top Right */}
       <div className="fixed top-4 right-4 z-30">
-        <UserMenu />
+        <UserMenu onUpgrade={openTransformPaywall} />
       </div>
 
       {/* Marketing funnel — camera / welcome only */}
@@ -615,12 +615,12 @@ export default function Home() {
         )}
       </AnimatePresence>
 
-      {/* Centered stage — absolute fill + flex center (works when logged in) */}
+      {/* Centered stage — scrollable on mobile so flaws/feedback stay reachable */}
       <div
         id="scan"
         className={
           viewMode === 'results'
-            ? 'absolute inset-0 flex flex-col lg:flex-row items-center justify-center gap-4 p-3 lg:p-6 lg:gap-6'
+            ? 'absolute inset-0 overflow-y-auto overflow-x-hidden overscroll-y-contain touch-pan-y flex flex-col lg:flex-row items-center justify-start lg:justify-center gap-4 p-3 pb-10 lg:p-6 lg:gap-6 lg:overflow-hidden'
             : 'relative w-full min-h-screen flex flex-col lg:flex-row items-center justify-center gap-8 p-6 lg:p-12 scroll-mt-4'
         }
       >
@@ -965,6 +965,21 @@ export default function Home() {
             )}
           </AnimatePresence>
         </IPhoneMockup>
+
+        {viewMode === 'camera' && !isPremium && (
+          <button
+            type="button"
+            onClick={openTransformPaywall}
+            className="mt-1 max-w-[280px] w-full text-center px-3 py-2 rounded-xl border border-[#22c55e]/30 bg-[#22c55e]/10 hover:bg-[#22c55e]/15 transition-colors"
+          >
+            <p className="text-[11px] font-semibold text-[#22c55e]">
+              After your scan → unlock Premium protocol
+            </p>
+            <p className="text-[10px] text-white/40 mt-0.5">
+              7-day free trial · AI after, fashion & physique
+            </p>
+          </button>
+        )}
       </div>
 
       {/* Results Panel (right side on desktop) - only show when NOT in protocol view */}
@@ -974,7 +989,7 @@ export default function Home() {
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 20 }}
-            className="w-full lg:w-[320px] xl:w-[360px] lg:flex-shrink-0"
+            className="w-full max-w-md mx-auto lg:mx-0 lg:w-[320px] xl:w-[360px] lg:flex-shrink-0"
           >
             <div className="rounded-2xl border border-white/10 bg-black/60 p-4">
               {/* Score strip */}
@@ -1038,6 +1053,21 @@ export default function Home() {
 
               <FlawsList features={analysisResult.features} />
 
+              {!isPremium && (
+                <button
+                  type="button"
+                  onClick={openTransformPaywall}
+                  className="mt-3 w-full rounded-xl border border-[#22c55e]/30 bg-[#22c55e]/10 px-3 py-2.5 text-left hover:bg-[#22c55e]/15 transition-colors"
+                >
+                  <p className="text-xs font-bold text-white">
+                    Fix these with Premium
+                  </p>
+                  <p className="text-[10px] text-white/45 mt-0.5">
+                    Softmax · Hardmax · AI after · 7-day free trial
+                  </p>
+                </button>
+              )}
+
               {/* Leaderboard — minimal footer */}
               <div className="mt-3 pt-3 border-t border-white/10 flex items-center gap-2">
                 <button
@@ -1090,6 +1120,7 @@ export default function Home() {
       <Leaderboard
         isOpen={showLeaderboard}
         onClose={() => setShowLeaderboard(false)}
+        isPremium={isPremium}
         onTransformCta={() => {
           setShowLeaderboard(false);
           openTransformPaywall();
